@@ -1,83 +1,74 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import { LocationService } from '../services/locationService';
 
 const LocationContext = createContext();
 
-// Default fallback coordinates (e.g. New Delhi: 28.6139, 77.2090)
-const DEFAULT_LOCATION = {
-  lat: 28.6139,
-  lng: 77.2090,
-  address: 'Central Square City Center',
-  accuracy: 10
-};
-
 export const LocationProvider = ({ children }) => {
-  const [location, setLocation] = useState(DEFAULT_LOCATION);
-  const [permissionState, setPermissionState] = useState('prompt'); // 'granted', 'denied', 'prompt'
+  const [location, setLocation] = useState({
+    lat: 28.6139,
+    lng: 77.2090,
+    address: 'New Delhi, India (Default Position)',
+    accuracy: 10,
+    isDefault: true
+  });
+
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [permissionStatus, setPermissionStatus] = useState('prompt'); // 'prompt' | 'granted' | 'denied'
 
-  const requestLocation = () => {
+  // Fetch Position
+  const requestLocation = useCallback(async () => {
     setLoading(true);
-    if (!navigator.geolocation) {
-      console.warn('[Geolocation] Browser does not support HTML5 Geolocation');
-      setPermissionState('denied');
-      setLoading(false);
-      return;
-    }
+    setError(null);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const newLoc = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          address: `GPS Location (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`
-        };
-        setLocation(newLoc);
-        setPermissionState('granted');
-        setLoading(false);
-      },
-      (error) => {
-        console.warn('[Geolocation Error]', error.message);
-        setPermissionState('denied');
-        setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
+    try {
+      const pos = await LocationService.getCurrentPosition({ timeout: 8000 });
+      const address = await LocationService.reverseGeocode(pos.lat, pos.lng);
 
-  useEffect(() => {
-    requestLocation();
+      const newLoc = {
+        lat: pos.lat,
+        lng: pos.lng,
+        accuracy: pos.accuracy,
+        address,
+        isDefault: false
+      };
 
-    // Continuous watchPosition for live movement
-    let watchId;
-    if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            address: `GPS Location (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`
-          });
-        },
-        (err) => {},
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
-      );
-    }
+      setLocation(newLoc);
+      setPermissionStatus('granted');
+      setError(null);
 
-    return () => {
-      if (watchId && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId);
+      // Persist to backend if user logged in
+      LocationService.shareLocation(pos.lat, pos.lng, address);
+    } catch (err) {
+      console.warn('[LocationContext] Geolocation error:', err.message);
+      setError(err);
+
+      if (err.code === 'PERMISSION_DENIED') {
+        setPermissionStatus('denied');
       }
-    };
+
+      // Keep existing location or default fallback
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const setManualLocation = (lat, lng, address = 'Selected Map Location') => {
-    setLocation({ lat, lng, address, accuracy: 5 });
-  };
+  useEffect(() => {
+    // Initial single-shot location request on startup
+    requestLocation();
+  }, [requestLocation]);
 
   return (
-    <LocationContext.Provider value={{ location, permissionState, loading, requestLocation, setManualLocation }}>
+    <LocationContext.Provider
+      value={{
+        location,
+        loading,
+        error,
+        permissionStatus,
+        requestLocation,
+        shareLocation: (address) => LocationService.shareLocation(location.lat, location.lng, address || location.address)
+      }}
+    >
       {children}
     </LocationContext.Provider>
   );

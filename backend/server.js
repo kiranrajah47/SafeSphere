@@ -14,6 +14,7 @@ const { startWatchdog } = require('./services/watchdogService');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const locationRoutes = require('./routes/locationRoutes');
 const sosRoutes = require('./routes/sosRoutes');
 const incidentRoutes = require('./routes/incidentRoutes');
 const alertRoutes = require('./routes/alertRoutes');
@@ -53,6 +54,9 @@ app.use('/api/v1/users', userRoutes);
 
 app.use('/api/v1/contacts', contactRoutes);
 app.use('/api/contacts', contactRoutes);
+
+app.use('/api/v1/location', locationRoutes);
+app.use('/api/location', locationRoutes);
 
 app.use('/api/v1/sos', sosRoutes);
 app.use('/api/sos', sosRoutes);
