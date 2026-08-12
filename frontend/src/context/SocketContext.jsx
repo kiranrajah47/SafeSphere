@@ -16,6 +16,7 @@ const SocketContext = createContext(defaultContext);
 
 export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
+  const { addToast } = useToast();
 
   // useToast is safe because ToastProvider wraps SocketProvider in App.jsx
   const addToastRef = useRef(addToast);
