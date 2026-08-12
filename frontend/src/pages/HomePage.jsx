@@ -118,11 +118,11 @@ export default function HomePage() {
 
       if (res.success && res.data) {
         setActiveSOS(res.data);
-        setShowSOSConfirmDialog(false);
         addToast({
-          type: 'error',
-          title: '🚨 EMERGENCY SOS ACTIVATED',
-          message: `Live ${selectedEmergencyType} alert is now broadcasting your GPS coordinates.`
+          type: 'success',
+          title: 'SOS Alert Sent',
+          message: 'Your emergency contacts have been notified.',
+          duration: 4000
         });
       }
     } catch (err) {
@@ -134,11 +134,13 @@ export default function HomePage() {
 
       addToast({
         type: 'error',
-        title: 'SOS Dispatch Error',
-        message: errorMsg
+        title: 'SOS could not be sent',
+        message: errorMsg,
+        duration: 5000
       });
     } finally {
       setSosLoading(false);
+      setShowSOSConfirmDialog(false);
     }
   };
 

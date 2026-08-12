@@ -15,14 +15,21 @@ import { ToastProvider, useToast } from '../ui/ToastContext';
 function DashboardLayoutContent({ children }) {
   const { user } = useAuth();
   const { location } = useLocation();
+  const { addToast } = useToast();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState(false);
   const [activeSOS, setActiveSOS] = useState(null);
+  const [dismissActiveModal, setDismissActiveModal] = useState(false);
 
   const handleTriggerSOS = async (emergencyType = 'PANIC') => {
     if (!user) {
-      alert('Please sign in to your SafeSphere account to trigger an Emergency SOS Alert.');
+      addToast({
+        type: 'error',
+        title: 'Authentication Required',
+        message: 'Please sign in to your SafeSphere account to trigger an Emergency SOS Alert.',
+        duration: 4000
+      });
       navigate('/login');
       return;
     }
@@ -38,7 +45,14 @@ function DashboardLayoutContent({ children }) {
       
       if (res.success && res.data) {
         setActiveSOS(res.data);
+        setDismissActiveModal(false);
         setShowPanicModal(false);
+        addToast({
+          type: 'success',
+          title: 'SOS Alert Sent',
+          message: 'Your emergency contacts have been notified.',
+          duration: 4000
+        });
       }
     } catch (err) {
       const errorMsg = err.message.includes('authorized') || err.message.includes('token')
@@ -47,7 +61,13 @@ function DashboardLayoutContent({ children }) {
         ? 'Backend API server is unreachable. Please verify backend is running on port 5000.'
         : err.message;
 
-      alert('SOS Dispatch Result: ' + errorMsg);
+      addToast({
+        type: 'error',
+        title: 'SOS could not be sent',
+        message: errorMsg,
+        duration: 5000
+      });
+      setShowPanicModal(false);
       if (err.message.includes('authorized') || err.message.includes('token')) {
         navigate('/login');
       }
@@ -59,9 +79,15 @@ function DashboardLayoutContent({ children }) {
       const res = await API.post('/sos/cancel');
       if (res.success) {
         setActiveSOS(null);
+        addToast({
+          type: 'info',
+          title: 'SOS Alert Cancelled',
+          message: 'Your emergency SOS session has been safely cancelled.',
+          duration: 4000
+        });
       }
     } catch (err) {
-      alert('Cancel failed: ' + err.message);
+      addToast({ type: 'error', title: 'Cancel Failed', message: err.message, duration: 4000 });
     }
   };
 
@@ -70,9 +96,15 @@ function DashboardLayoutContent({ children }) {
       const res = await API.post('/sos/resolve', { sosId });
       if (res.success) {
         setActiveSOS(null);
+        addToast({
+          type: 'success',
+          title: 'Marked Safe',
+          message: 'Glad you are safe! Emergency SOS has been resolved.',
+          duration: 4000
+        });
       }
     } catch (err) {
-      alert('Resolve failed: ' + err.message);
+      addToast({ type: 'error', title: 'Resolve Failed', message: err.message, duration: 4000 });
     }
   };
 
@@ -125,11 +157,12 @@ function DashboardLayoutContent({ children }) {
       </Modal>
 
       {/* Active Emergency SOS Running Overlay */}
-      {activeSOS && (
+      {activeSOS && !dismissActiveModal && (
         <SOSActiveModal
           activeSOS={activeSOS}
           onCancelSOS={handleCancelSOS}
           onResolveSOS={handleResolveSOS}
+          onClose={() => setDismissActiveModal(true)}
         />
       )}
 

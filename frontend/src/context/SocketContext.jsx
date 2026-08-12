@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useToast } from '../components/ui/ToastContext';
@@ -26,8 +26,20 @@ export const SocketProvider = ({ children }) => {
   const [activeSOSAlerts, setActiveSOSAlerts] = useState([]);
   const [latestCommunityAlert, setLatestCommunityAlert] = useState(null);
   const [realtimeEventCounter, setRealtimeEventCounter] = useState(0);
+  const handledEventKeysRef = useRef(new Set());
 
   const bump = useCallback(() => setRealtimeEventCounter(c => c + 1), []);
+
+  const shouldProcessEvent = useCallback((eventKey) => {
+    if (handledEventKeysRef.current.has(eventKey)) {
+      return false;
+    }
+    handledEventKeysRef.current.add(eventKey);
+    setTimeout(() => {
+      handledEventKeysRef.current.delete(eventKey);
+    }, 4000);
+    return true;
+  }, []);
 
   useEffect(() => {
     // Get JWT token from localStorage (stored as part of safesphere_user object)
@@ -74,36 +86,59 @@ export const SocketProvider = ({ children }) => {
     // ---- Event Handlers ----
 
     const handleSOSCreated = (data) => {
+      const sosId = data?.sos?._id || data?._id || `${data?.user?._id}-${data?.timestamp}`;
+      const eventKey = `sos-created-${sosId}`;
+      if (!shouldProcessEvent(eventKey)) return;
+
       console.log('[Socket] sos-created', data);
       setActiveSOSAlerts(prev => [data, ...prev]);
       bump();
+
+      // Only show broadcast toast to OTHER users (creator gets their immediate HTTP toast)
+      const creatorId = data?.user?._id || data?.sos?.user;
+      if (user?._id && creatorId && String(user._id) === String(creatorId)) {
+        return; // Skip duplicate toast for creator
+      }
+
       addToast({
         type: 'error',
         title: '🚨 Emergency SOS Activated',
-        message: `${data?.user?.name || 'A user'} triggered an SOS near ${data?.sos?.location?.address || 'your area'}.`
+        message: `${data?.user?.name || 'A user'} triggered an SOS near ${data?.sos?.location?.address || 'your area'}.`,
+        duration: 4000
       });
     };
 
     const handleSOSResolved = (data) => {
       const sosId = data?.sosId || data?._id;
+      const eventKey = `sos-resolved-${sosId}`;
+      if (!shouldProcessEvent(eventKey)) return;
+
       console.log('[Socket] sos-resolved', sosId);
       setActiveSOSAlerts(prev => prev.filter(a => (a.sos?._id || a._id) !== sosId));
       bump();
+
       addToast({
         type: 'success',
         title: 'Emergency SOS Resolved',
-        message: 'The emergency SOS has been safely resolved.'
+        message: 'The emergency SOS has been safely resolved.',
+        duration: 4000
       });
     };
 
     const handleAlertCreated = (alert) => {
+      const alertId = alert?._id || `${alert?.title}-${alert?.createdAt}`;
+      const eventKey = `alert-created-${alertId}`;
+      if (!shouldProcessEvent(eventKey)) return;
+
       console.log('[Socket] alert-created', alert);
       setLatestCommunityAlert(alert);
       bump();
+
       addToast({
         type: 'warning',
         title: `⚠️ Safety Alert: ${alert?.title || 'New Alert'}`,
-        message: `New ${alert?.severity?.toUpperCase() || 'MEDIUM'} severity ${alert?.category || ''} alert near ${alert?.address || 'your area'}.`
+        message: `New ${alert?.severity?.toUpperCase() || 'MEDIUM'} severity ${alert?.category || ''} alert near ${alert?.address || 'your area'}.`,
+        duration: 4000
       });
     };
 
@@ -113,12 +148,18 @@ export const SocketProvider = ({ children }) => {
     };
 
     const handleIncidentVerified = (report) => {
+      const reportId = report?._id || `${report?.title}`;
+      const eventKey = `incident-verified-${reportId}`;
+      if (!shouldProcessEvent(eventKey)) return;
+
       console.log('[Socket] incident-verified', report);
       bump();
+
       addToast({
         type: 'info',
         title: 'Verified Alert Published',
-        message: `Moderators verified "${report?.title || 'an incident'}" as a community safety alert.`
+        message: `Moderators verified "${report?.title || 'an incident'}" as a community safety alert.`,
+        duration: 4000
       });
     };
 
@@ -128,16 +169,22 @@ export const SocketProvider = ({ children }) => {
     };
 
     const handleJourneyWarning = (data) => {
+      const journeyId = data?.journey?._id || data?._id;
+      const eventKey = `journey-warning-${journeyId}`;
+      if (!shouldProcessEvent(eventKey)) return;
+
       console.log('[Socket] journey-warning', data);
       bump();
+
       addToast({
         type: 'error',
         title: '🚨 Safe Journey Warning',
-        message: `Trip to "${data?.journey?.destinationName || 'destination'}" has exceeded expected arrival time.`
+        message: `Trip to "${data?.journey?.destinationName || 'destination'}" has exceeded expected arrival time.`,
+        duration: 5000
       });
     };
 
-    // Register both hyphenated and underscored event variants
+    // Register event listeners
     const events = [
       ['sos-created', 'sos_created', handleSOSCreated],
       ['sos-resolved', 'sos_resolved', handleSOSResolved],
@@ -145,7 +192,7 @@ export const SocketProvider = ({ children }) => {
       ['alert-updated', 'alert_updated', handleAlertUpdated],
       ['incident-verified', 'incident_verified', handleIncidentVerified],
       ['journey-started', 'journey_started', handleJourneyStarted],
-      ['journey-warning', 'journey_warning', handleJourneyWarning],
+      ['journey-warning', 'journey_warning', handleJourneyWarning]
     ];
 
     events.forEach(([hyphen, underscore, handler]) => {
@@ -162,25 +209,26 @@ export const SocketProvider = ({ children }) => {
       });
       socketInstance.disconnect();
     };
-  }, [user?._id]);
+  }, [user?._id, addToast, bump, shouldProcessEvent]);
 
-  const dismissCommunityAlert = useCallback(() => setLatestCommunityAlert(null), []);
+  const dismissCommunityAlert = useCallback(() => {
+    setLatestCommunityAlert(null);
+  }, []);
 
   return (
-    <SocketContext.Provider value={{
-      socket,
-      isConnected,
-      activeSOSAlerts,
-      latestCommunityAlert,
-      dismissCommunityAlert,
-      realtimeEventCounter
-    }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        activeSOSAlerts,
+        latestCommunityAlert,
+        dismissCommunityAlert,
+        realtimeEventCounter
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );
 };
 
-export const useSocket = () => {
-  const ctx = useContext(SocketContext);
-  return ctx || defaultContext;
-};
+export const useSocket = () => useContext(SocketContext) || defaultContext;

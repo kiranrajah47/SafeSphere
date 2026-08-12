@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { AlertOctagon, CheckCircle2, MapPin, XCircle, PhoneCall, Radio, Info } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, MapPin, XCircle, PhoneCall, Radio, Info, X } from 'lucide-react';
 import Button from '../ui/Button';
 
-export default function SOSActiveModal({ activeSOS, onCancelSOS, onResolveSOS }) {
+export default function SOSActiveModal({ activeSOS, onCancelSOS, onResolveSOS, onClose }) {
   const [loading, setLoading] = useState(false);
 
   if (!activeSOS) return null;
@@ -14,8 +14,19 @@ export default function SOSActiveModal({ activeSOS, onCancelSOS, onResolveSOS })
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="w-full max-w-lg bg-white rounded-3xl border border-red-200 shadow-2xl p-6 sm:p-8 space-y-6 relative overflow-hidden">
         
+        {/* Close / Dismiss Overlay Button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors z-10"
+            title="Minimize Overlay to Dashboard"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Pulsing Top Bar */}
-        <div className="flex items-center space-x-3.5 pb-4 border-b border-slate-100">
+        <div className="flex items-center space-x-3.5 pb-4 border-b border-slate-100 pr-8">
           <div className="p-3 bg-red-100 text-red-600 rounded-2xl border border-red-200 animate-pulse flex-shrink-0">
             <AlertOctagon className="w-8 h-8" />
           </div>
