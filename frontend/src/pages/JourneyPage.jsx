@@ -1,215 +1,420 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import PageHeader from '../components/layout/PageHeader';
+import JourneyStatusCard from '../components/journey/JourneyStatusCard';
+import SafetyCheckModal from '../components/journey/SafetyCheckModal';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
+import Input from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import AlertBanner from '../components/ui/AlertBanner';
+import { SkeletonCard } from '../components/ui/LoadingSpinner';
+import EmptyState from '../components/ui/EmptyState';
 import { useLocation } from '../context/LocationContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/ui/ToastContext';
+import { LocationService } from '../services/locationService';
 import API from '../services/api';
-import { Navigation, Clock, CheckCircle, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { 
+  Navigation, 
+  MapPin, 
+  Clock, 
+  User, 
+  ShieldCheck, 
+  Radio, 
+  CheckCircle2, 
+  XCircle, 
+  Info,
+  Plus
+} from 'lucide-react';
 
 export default function JourneyPage() {
   const { location } = useLocation();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+
   const [activeJourney, setActiveJourney] = useState(null);
+  const [journeyHistory, setJourneyHistory] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Form State
   const [destinationName, setDestinationName] = useState('');
-  const [durationMinutes, setDurationMinutes] = useState(20);
-  const [checkInInterval, setCheckInInterval] = useState(10);
+  const [estimatedDuration, setEstimatedDuration] = useState('30');
+  const [selectedContactId, setSelectedContactId] = useState('');
   const [starting, setStarting] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  const fetchActiveJourney = async () => {
+  // Safety Check Modal State
+  const [showSafetyCheck, setShowSafetyCheck] = useState(false);
+
+  // Geolocation Watcher Reference
+  const watchIdRef = useRef(null);
+
+  // Fetch Data
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      const res = await API.get('/journey/active');
-      if (res.success && res.data) {
-        setActiveJourney(res.data);
-      } else {
-        setActiveJourney(null);
+      if (user) {
+        const [activeRes, contactsRes, historyRes] = await Promise.all([
+          API.get('/journey/active'),
+          API.get('/contacts'),
+          API.get('/journey/history')
+        ]);
+
+        if (activeRes.success) setActiveJourney(activeRes.data || null);
+        if (contactsRes.success) {
+          const list = contactsRes.data || [];
+          setContacts(list);
+          const primary = list.find(c => c.isPrimary);
+          if (primary) setSelectedContactId(primary._id);
+          else if (list.length > 0) setSelectedContactId(list[0]._id);
+        }
+        if (historyRes.success) setJourneyHistory(historyRes.data || []);
       }
     } catch (err) {
-      console.warn('[JourneyPage] Error:', err.message);
+      console.warn('[JourneyPage] Data fetch error:', err.message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchActiveJourney();
-  }, []);
+    fetchData();
+  }, [user]);
 
+  // Periodic Watchdog check for overdue active journey
+  useEffect(() => {
+    if (!activeJourney || activeJourney.status === 'completed' || activeJourney.status === 'cancelled') return;
+
+    const checkOverdue = () => {
+      const expected = new Date(activeJourney.expectedArrivalTime).getTime();
+      if (Date.now() > expected && !showSafetyCheck) {
+        setShowSafetyCheck(true);
+      }
+    };
+
+    checkOverdue();
+    const interval = setInterval(checkOverdue, 5000);
+    return () => clearInterval(interval);
+  }, [activeJourney, showSafetyCheck]);
+
+  // Foreground Periodic Location Watcher (Updates backend every 15s while active)
+  useEffect(() => {
+    if (activeJourney && activeJourney.status === 'in_progress' && !activeJourney.isPaused) {
+      watchIdRef.current = LocationService.watchPosition(
+        async (pos) => {
+          try {
+            await API.put('/journey/location', {
+              latitude: pos.lat,
+              longitude: pos.lng,
+              address: location.address
+            });
+          } catch (e) {}
+        },
+        (err) => console.warn('[LocationWatch Error]', err.message),
+        { maximumAge: 10000, timeout: 10000 }
+      );
+    } else {
+      if (watchIdRef.current !== null) {
+        LocationService.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    }
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        LocationService.clearWatch(watchIdRef.current);
+      }
+    };
+  }, [activeJourney, location.address]);
+
+  // Start Journey Handler
   const handleStartJourney = async (e) => {
     e.preventDefault();
+    setFormError('');
+
+    if (!user) {
+      addToast({ type: 'warning', title: 'Sign In Required', message: 'Please log in to start Safe Journey watchdog.' });
+      return;
+    }
+
+    if (!destinationName.trim()) {
+      setFormError('Please enter a destination name.');
+      return;
+    }
+
     setStarting(true);
+
     try {
       const res = await API.post('/journey/start', {
-        destinationName,
-        estimatedDurationMinutes: parseInt(durationMinutes),
-        checkInIntervalMinutes: parseInt(checkInInterval),
-        startCoordinates: [location.lng, location.lat]
+        destinationName: destinationName.trim(),
+        estimatedDurationMinutes: estimatedDuration,
+        contactId: selectedContactId,
+        latitude: location.lat,
+        longitude: location.lng,
+        address: location.address
       });
 
       if (res.success && res.data) {
         setActiveJourney(res.data);
-        alert('Safe Journey Watchdog activated! Perform periodic check-ins until arrival.');
+        setDestinationName('');
+        addToast({
+          type: 'success',
+          title: 'Safe Journey Started 🛡️',
+          message: `Watchdog active for trip to "${res.data.destinationName}".`
+        });
       }
     } catch (err) {
-      alert('Failed to start journey: ' + err.message);
+      setFormError(err.message || 'Failed to start journey.');
     } finally {
       setStarting(false);
     }
   };
 
-  const handleCheckIn = async () => {
+  // Toggle Pause
+  const handlePauseToggle = async () => {
     try {
-      const res = await API.post('/journey/check-in');
+      const res = await API.put('/journey/pause');
       if (res.success && res.data) {
         setActiveJourney(res.data);
-        alert('Check-in confirmed! Timer refreshed.');
+        addToast({
+          type: 'info',
+          title: res.data.isPaused ? 'Journey Paused' : 'Journey Resumed',
+          message: res.data.isPaused ? 'Timer watchdog temporarily paused.' : 'Foreground tracking resumed.'
+        });
       }
     } catch (err) {
-      alert('Check-in failed: ' + err.message);
+      addToast({ type: 'error', title: 'Action Failed', message: err.message });
     }
   };
 
+  // Complete Journey
   const handleCompleteJourney = async () => {
     try {
       const res = await API.post('/journey/complete');
       if (res.success) {
         setActiveJourney(null);
-        alert('Safe Journey completed successfully! Glad you arrived safely.');
+        setShowSafetyCheck(false);
+        addToast({
+          type: 'success',
+          title: 'Welcome Back! Safe Arrival Confirmed 🎉',
+          message: 'Safe Journey watchdog has been disarmed.'
+        });
+        fetchData();
       }
     } catch (err) {
-      alert('Failed to end journey: ' + err.message);
+      addToast({ type: 'error', title: 'Completion Failed', message: err.message });
+    }
+  };
+
+  // Cancel Journey
+  const handleCancelJourney = async () => {
+    try {
+      const res = await API.post('/journey/cancel');
+      if (res.success) {
+        setActiveJourney(null);
+        setShowSafetyCheck(false);
+        addToast({
+          type: 'info',
+          title: 'Safe Journey Cancelled',
+          message: 'Watchdog session disarmed.'
+        });
+        fetchData();
+      }
+    } catch (err) {
+      addToast({ type: 'error', title: 'Cancellation Failed', message: err.message });
+    }
+  };
+
+  // Escalate Overdue Journey
+  const handleEscalateJourney = async () => {
+    try {
+      const res = await API.post('/journey/escalate');
+      if (res.success) {
+        setShowSafetyCheck(false);
+        addToast({
+          type: 'error',
+          title: '🚨 JOURNEY ESCALATED TO CONTACTS',
+          message: 'Emergency SMS alert dispatched to your trusted contacts.'
+        });
+        fetchData();
+      }
+    } catch (err) {
+      addToast({ type: 'error', title: 'Escalation Error', message: err.message });
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+    <div className="space-y-6">
       
-      {/* Header */}
-      <div className="glass-panel p-6 rounded-3xl border border-slate-800 flex items-center space-x-4">
-        <div className="p-3.5 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20">
-          <Navigation className="w-8 h-8" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-black text-white">Safe Journey Mode</h1>
-          <p className="text-sm text-slate-400">
-            Travelling alone at night or in unfamiliar areas? Set your trip timer and let the automated watchdog protect you.
-          </p>
-        </div>
-      </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Safe Journey Mode"
+        subtitle="Shared travel safety with arrival watchdog timers and emergency contact escalations"
+        icon={Navigation}
+        badge={<Badge variant={activeJourney ? 'emerald' : 'slate'} size="sm">{activeJourney ? 'Watchdog Running' : 'Idle'}</Badge>}
+      />
 
-      {/* Active Journey Widget */}
-      {activeJourney ? (
-        <div className="glass-panel p-8 rounded-3xl border border-emerald-500/40 bg-slate-900/90 shadow-2xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-            <div className="flex items-center space-x-3">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-              <h2 className="text-xl font-bold text-white">Journey In Progress</h2>
-            </div>
-            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold rounded-full">
-              WATCHDOG ACTIVE
-            </span>
-          </div>
+      {/* Browser Limitations Transparency Banner */}
+      <AlertBanner type="info" title="Foreground Location Tracking Notice">
+        SafeSphere provides reliable foreground location tracking while your browser tab remains active. Keep this browser tab open during travel to maintain continuous GPS position updates and watchdog protection.
+      </AlertBanner>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
-              <p className="text-xs text-slate-400">Destination</p>
-              <h3 className="text-lg font-bold text-slate-100">{activeJourney.destinationName}</h3>
-            </div>
+      {/* Active Journey Status Card */}
+      {activeJourney && (
+        <JourneyStatusCard
+          activeJourney={activeJourney}
+          onPauseToggle={handlePauseToggle}
+          onComplete={handleCompleteJourney}
+          onCancel={handleCancelJourney}
+          onTriggerSafetyCheck={() => setShowSafetyCheck(true)}
+        />
+      )}
 
-            <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
-              <p className="text-xs text-slate-400">Expected Arrival</p>
-              <h3 className="text-lg font-bold text-emerald-400">
-                {new Date(activeJourney.expectedArrivalTime).toLocaleTimeString()}
-              </h3>
-            </div>
-          </div>
+      {/* Start New Journey Form Card */}
+      {!activeJourney && (
+        <Card className="shadow-lg border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-slate-900 font-extrabold text-lg flex items-center gap-2">
+              <Navigation className="w-5 h-5 text-indigo-600" />
+              Configure Safe Journey Watchdog
+            </CardTitle>
+            <CardDescription>
+              Set your destination and expected travel duration to arm automated check-ins
+            </CardDescription>
+          </CardHeader>
 
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start space-x-3 text-xs text-amber-300">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <p>
-              Remember to tap <strong>"I Am Safe (Check-in)"</strong> periodically or complete the trip upon arrival. If the expected arrival time expires without check-in, an automated Emergency SOS will be dispatched to your trusted contacts.
-            </p>
-          </div>
+          <CardContent className="p-6 sm:p-8 space-y-6">
+            
+            {formError && (
+              <AlertBanner type="danger" onDismiss={() => setFormError('')}>
+                {formError}
+              </AlertBanner>
+            )}
 
-          <div className="flex flex-col sm:flex-row gap-4 pt-2">
-            <button
-              onClick={handleCheckIn}
-              className="flex-1 py-3.5 px-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center space-x-2"
-            >
-              <Clock className="w-5 h-5" />
-              <span>I Am Safe (Check-in)</span>
-            </button>
-
-            <button
-              onClick={handleCompleteJourney}
-              className="flex-1 py-3.5 px-4 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center space-x-2"
-            >
-              <CheckCircle className="w-5 h-5" />
-              <span>Arrived Safely (End Trip)</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Journey Setup Form */
-        <div className="glass-panel p-8 rounded-3xl border border-slate-800 shadow-xl space-y-6">
-          <h2 className="text-xl font-bold text-white">Start New Safe Journey</h2>
-
-          <form onSubmit={handleStartJourney} className="space-y-5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                Destination Name / Landmark
-              </label>
-              <input
-                type="text"
+            <form onSubmit={handleStartJourney} className="space-y-5">
+              
+              <Input
+                label="Destination Name / Address"
                 required
                 value={destinationName}
                 onChange={(e) => setDestinationName(e.target.value)}
-                placeholder="e.g. Home, University Hostel, Central Station"
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500"
+                placeholder="e.g. Home / Central Railway Station / Office"
               />
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                  Estimated Trip Duration (Minutes)
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="5"
-                  max="300"
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <Select
+                  label="Expected Travel Duration"
+                  value={estimatedDuration}
+                  onChange={(e) => setEstimatedDuration(e.target.value)}
+                  options={[
+                    { value: '15', label: '15 Minutes (Quick Trip)' },
+                    { value: '30', label: '30 Minutes (Standard Commute)' },
+                    { value: '45', label: '45 Minutes' },
+                    { value: '60', label: '60 Minutes (1 Hour)' },
+                    { value: '90', label: '90 Minutes (1.5 Hours)' },
+                    { value: '120', label: '120 Minutes (2 Hours)' }
+                  ]}
                 />
+
+                <Select
+                  label="Notified Guardian Contact"
+                  value={selectedContactId}
+                  onChange={(e) => setSelectedContactId(e.target.value)}
+                  options={
+                    contacts.length === 0
+                      ? [{ value: '', label: 'No contacts added (Select None)' }]
+                      : contacts.map(c => ({
+                          value: c._id,
+                          label: `${c.name} (${c.relationship}) ${c.isPrimary ? '⭐ Primary' : ''}`
+                        }))
+                  }
+                />
+
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                  Check-in Interval (Minutes)
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="3"
-                  max="60"
-                  value={checkInInterval}
-                  onChange={(e) => setCheckInInterval(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-                />
+              {/* Start Position Readout */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
+                <span className="text-slate-500 font-semibold flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-indigo-600" /> Start Position:
+                </span>
+                <span className="font-bold text-slate-900 truncate max-w-xs">{location.address}</span>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={starting}
-              className="w-full py-4 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center space-x-2"
-            >
-              <Navigation className="w-5 h-5" />
-              <span>{starting ? 'Initializing Watchdog...' : 'Activate Safe Journey Watchdog'}</span>
-            </button>
-          </form>
-        </div>
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                loading={starting}
+                icon={Navigation}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/25"
+              >
+                Arm Watchdog & Start Safe Journey
+              </Button>
+
+            </form>
+
+          </CardContent>
+        </Card>
       )}
+
+      {/* Historical Journeys Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-slate-900 font-extrabold text-base flex items-center gap-2">
+            <Clock className="w-5 h-5 text-slate-600" />
+            Travel & Safe Journey History
+          </CardTitle>
+          <CardDescription>Log of completed and disarmed Safe Journey sessions</CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          {loading ? (
+            <SkeletonCard rows={2} />
+          ) : journeyHistory.length === 0 ? (
+            <EmptyState
+              icon={Navigation}
+              title="No Past Journeys"
+              description="Your travel history will be logged here whenever you complete a Safe Journey."
+            />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {journeyHistory.map((j) => (
+                <div key={j._id} className="py-3.5 flex items-center justify-between gap-4 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-extrabold text-slate-900">{j.destinationName}</span>
+                      <Badge
+                        variant={j.status === 'completed' || j.status === 'COMPLETED' ? 'emerald' : 'slate'}
+                        size="sm"
+                      >
+                        {j.status?.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <p className="text-slate-500">
+                      Duration: {j.estimatedDurationMinutes} mins • Guardian: {j.trustedContact?.name || 'Self Guard'}
+                    </p>
+                  </div>
+
+                  <span className="text-[11px] text-slate-400 font-semibold whitespace-nowrap">
+                    {new Date(j.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Safety Check Overdue Modal */}
+      <SafetyCheckModal
+        isOpen={showSafetyCheck}
+        activeJourney={activeJourney}
+        onConfirmSafe={handleCompleteJourney}
+        onEscalate={handleEscalateJourney}
+      />
 
     </div>
   );

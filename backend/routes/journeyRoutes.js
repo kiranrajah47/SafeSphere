@@ -2,15 +2,26 @@ const express = require('express');
 const router = express.Router();
 const {
   startJourney,
-  checkInJourney,
+  updateJourneyLocation,
+  togglePauseJourney,
   completeJourney,
-  getActiveJourney
+  cancelJourney,
+  escalateJourney,
+  getActiveJourney,
+  getJourneyHistory
 } = require('../controllers/journeyController');
 const { protect } = require('../middlewares/authMiddleware');
 
-router.post('/start', protect, startJourney);
-router.post('/check-in', protect, checkInJourney);
-router.post('/complete', protect, completeJourney);
-router.get('/active', protect, getActiveJourney);
+router.use(protect); // All journey routes require authentication
+
+router.post('/start', startJourney);
+router.put('/location', updateJourneyLocation);
+router.put('/pause', togglePauseJourney);
+router.post('/complete', completeJourney);
+router.post('/cancel', cancelJourney);
+router.post('/escalate', escalateJourney);
+
+router.get('/active', getActiveJourney);
+router.get('/history', getJourneyHistory);
 
 module.exports = router;
