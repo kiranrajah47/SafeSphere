@@ -16,10 +16,10 @@ const userRoutes = require('./routes/userRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const sosRoutes = require('./routes/sosRoutes');
-const incidentRoutes = require('./routes/incidentRoutes');
-const alertRoutes = require('./routes/alertRoutes');
-const journeyRoutes = require('./routes/journeyRoutes');
 const resourceRoutes = require('./routes/resourceRoutes');
+const alertRoutes = require('./routes/alertRoutes');
+const incidentRoutes = require('./routes/incidentRoutes');
+const journeyRoutes = require('./routes/journeyRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 
@@ -64,8 +64,10 @@ app.use('/api/sos', sosRoutes);
 app.use('/api/v1/resources', resourceRoutes);
 app.use('/api/resources', resourceRoutes);
 
-app.use('/api/v1/incidents', incidentRoutes);
 app.use('/api/v1/alerts', alertRoutes);
+app.use('/api/alerts', alertRoutes);
+
+app.use('/api/v1/incidents', incidentRoutes);
 app.use('/api/v1/journey', journeyRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/admin', adminRoutes);

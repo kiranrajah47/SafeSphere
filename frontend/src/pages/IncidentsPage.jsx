@@ -1,233 +1,435 @@
 import React, { useState, useEffect } from 'react';
-import API from '../services/api';
-import { AlertTriangle, ThumbsUp, MapPin, Plus, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import PageHeader from '../components/layout/PageHeader';
+import AlertCard from '../components/alerts/AlertCard';
+import AlertDetailModal from '../components/alerts/AlertDetailModal';
+import SafetyMap from '../components/map/SafetyMap';
 import { useLocation } from '../context/LocationContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/ui/ToastContext';
+import Input from '../components/ui/Input';
+import { Select, TextArea } from '../components/ui/Select';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import ConfirmationDialog from '../components/ui/ConfirmationDialog';
+import { SkeletonCard } from '../components/ui/LoadingSpinner';
+import EmptyState from '../components/ui/EmptyState';
+import AlertBanner from '../components/ui/AlertBanner';
+import API from '../services/api';
+import { 
+  AlertTriangle, 
+  Plus, 
+  Search, 
+  MapPin, 
+  Filter, 
+  Layers, 
+  List, 
+  Map as MapIcon, 
+  Clock, 
+  CheckCircle2, 
+  ShieldAlert 
+} from 'lucide-react';
 
 export default function IncidentsPage() {
   const { location } = useLocation();
-  const [incidents, setIncidents] = useState([]);
+  const { user } = useAuth();
+  const { addToast } = useToast();
+
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'map'
 
-  // Form State
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('HARASSMENT');
-  const [severity, setSeverity] = useState('MEDIUM');
-  const [submitting, setSubmitting] = useState(false);
+  // Filter States
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [severityFilter, setSeverityFilter] = useState('ALL');
+  const [timeFilter, setTimeFilter] = useState('all'); // '24h' | '7d' | '30d' | 'all'
+  const [radiusKm, setRadiusKm] = useState('50');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchIncidents = async () => {
+  // Selected Detail Modal State
+  const [selectedAlert, setSelectedAlert] = useState(null);
+
+  // Post Alert Modal State
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [postFormData, setPostFormData] = useState({
+    title: '',
+    description: '',
+    category: 'Accident',
+    severity: 'medium'
+  });
+  const [postError, setPostError] = useState('');
+  const [posting, setPosting] = useState(false);
+
+  // Delete Alert Confirmation State
+  const [alertToDelete, setAlertToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Categories required by prompt
+  const categoriesList = [
+    'Accident',
+    'Fire',
+    'Crime',
+    'Medical emergency',
+    'Road hazard',
+    'Suspicious activity',
+    'Missing person',
+    'Natural disaster',
+    'Other'
+  ];
+
+  // Fetch Alerts
+  const fetchAlerts = async () => {
+    setLoading(true);
     try {
-      const res = await API.get('/incidents');
+      const res = await API.get(
+        `/alerts?lat=${location.lat}&lng=${location.lng}&category=${categoryFilter}&severity=${severityFilter}&timeRange=${timeFilter}&radiusKm=${radiusKm}`
+      );
       if (res.success) {
-        setIncidents(res.data || []);
+        setAlerts(res.data || []);
       }
     } catch (err) {
-      console.warn('[IncidentsPage] Error:', err.message);
+      console.warn('[IncidentsPage] Fetch error:', err.message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchIncidents();
-  }, []);
+    fetchAlerts();
+  }, [location.lat, location.lng, categoryFilter, severityFilter, timeFilter, radiusKm]);
 
-  const handleUpvote = async (id) => {
-    try {
-      const res = await API.post(`/incidents/${id}/upvote`);
-      if (res.success) {
-        setIncidents(incidents.map(inc => inc._id === id ? res.data : inc));
-      }
-    } catch (err) {
-      alert('Upvote failed: ' + err.message);
-    }
-  };
-
-  const handleCreateReport = async (e) => {
+  // Submit New Community Alert
+  const handlePostAlert = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    setPostError('');
+
+    if (!user) {
+      addToast({ type: 'warning', title: 'Sign In Required', message: 'Please log in to report community safety alerts.' });
+      return;
+    }
+
+    if (!postFormData.title || !postFormData.description) {
+      setPostError('Please enter both a title and description.');
+      return;
+    }
+
+    setPosting(true);
 
     try {
-      const res = await API.post('/incidents', {
-        title,
-        description,
-        category,
-        severity,
+      const res = await API.post('/alerts', {
+        title: postFormData.title,
+        description: postFormData.description,
+        category: postFormData.category,
+        severity: postFormData.severity,
+        latitude: location.lat,
+        longitude: location.lng,
         coordinates: [location.lng, location.lat],
         address: location.address
       });
 
       if (res.success && res.data) {
-        setIncidents([res.data, ...incidents]);
-        setShowModal(false);
-        setTitle('');
-        setDescription('');
-        alert('Incident report submitted to community feed!');
+        addToast({ type: 'success', title: 'Alert Posted', message: 'Your community safety alert is now live on the network.' });
+        setShowPostModal(false);
+        setPostFormData({ title: '', description: '', category: 'Accident', severity: 'medium' });
+        fetchAlerts();
       }
     } catch (err) {
-      alert('Submission failed: ' + err.message);
+      setPostError(err.message || 'Failed to post community alert.');
     } finally {
-      setSubmitting(false);
+      setPosting(false);
     }
   };
 
+  // Flag / Report Inappropriate Alert
+  const handleFlagAlert = async (alertItem) => {
+    if (!user) {
+      addToast({ type: 'warning', title: 'Sign In Required', message: 'Please log in to report false or inappropriate content.' });
+      return;
+    }
+
+    try {
+      const res = await API.post(`/alerts/${alertItem._id}/flag`);
+      if (res.success) {
+        addToast({
+          type: 'info',
+          title: 'Alert Reported',
+          message: 'Thank you for helping keep the SafeSphere network clean. This alert has been flagged for moderation.'
+        });
+        fetchAlerts();
+      }
+    } catch (err) {
+      addToast({ type: 'error', title: 'Report Action', message: err.message });
+    }
+  };
+
+  // Delete Alert Action
+  const handleConfirmDelete = async () => {
+    if (!alertToDelete) return;
+    setDeleting(true);
+    try {
+      const res = await API.delete(`/alerts/${alertToDelete._id}`);
+      if (res.success) {
+        addToast({ type: 'info', title: 'Alert Deleted', message: 'Community alert has been removed.' });
+        setAlertToDelete(null);
+        fetchAlerts();
+      }
+    } catch (err) {
+      addToast({ type: 'error', title: 'Deletion Failed', message: err.message });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Client-side text search filter
+  const filteredAlerts = alerts.filter(
+    (a) =>
+      a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-panel p-6 rounded-3xl border border-slate-800">
-        <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-2">
-            <AlertTriangle className="w-6 h-6 text-amber-400" />
-            Crowd-Sourced Community Incident Feed
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Report hazards, suspicious activities, or harassment to alert nearby community members and local authorities.
-          </p>
+      <PageHeader
+        title="Community Safety Alerts & Incidents"
+        subtitle="Real-time crowd-sourced safety notices, crime alerts, hazard warnings, and neighborhood reports"
+        icon={AlertTriangle}
+        badge={<Badge variant="amber" size="sm">{filteredAlerts.length} Active Alerts</Badge>}
+        actions={
+          <Button variant="danger" icon={Plus} onClick={() => setShowPostModal(true)}>
+            Report Safety Alert
+          </Button>
+        }
+      />
+
+      {/* View Switcher & Filters Toolbar */}
+      <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+        
+        {/* Top Controls Row */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          
+          {/* Search Box */}
+          <div className="relative w-full sm:w-80">
+            <Input
+              icon={Search}
+              placeholder="Search title, hazard, or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          {/* View Mode Toggle Buttons */}
+          <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Grid View</span>
+            </button>
+
+            <button
+              onClick={() => setViewMode('map')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                viewMode === 'map' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Map View</span>
+            </button>
+          </div>
+
         </div>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="px-5 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 shadow-lg shadow-amber-600/20 transition-all flex items-center space-x-2"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Report Safety Incident</span>
-        </button>
+        {/* Dropdown Filters Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
+          
+          {/* Category Filter */}
+          <Select
+            label="Category"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            options={[
+              { value: 'ALL', label: 'All Categories' },
+              ...categoriesList.map(c => ({ value: c, label: c }))
+            ]}
+          />
+
+          {/* Severity Filter */}
+          <Select
+            label="Severity"
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+            options={[
+              { value: 'ALL', label: 'All Severities' },
+              { value: 'critical', label: 'Critical' },
+              { value: 'high', label: 'High' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'low', label: 'Low' }
+            ]}
+          />
+
+          {/* Time Range Filter */}
+          <Select
+            label="Time Range"
+            value={timeFilter}
+            onChange={(e) => setTimeFilter(e.target.value)}
+            options={[
+              { value: 'all', label: 'All Time' },
+              { value: '24h', label: 'Past 24 Hours' },
+              { value: '7d', label: 'Past 7 Days' },
+              { value: '30d', label: 'Past 30 Days' }
+            ]}
+          />
+
+          {/* Nearby Radius Filter */}
+          <Select
+            label="Distance Radius"
+            value={radiusKm}
+            onChange={(e) => setRadiusKm(e.target.value)}
+            options={[
+              { value: '5', label: 'Within 5 km' },
+              { value: '10', label: 'Within 10 km' },
+              { value: '25', label: 'Within 25 km' },
+              { value: '50', label: 'Within 50 km' }
+            ]}
+          />
+
+        </div>
+
       </div>
 
-      {/* Incident List Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {incidents.length === 0 ? (
-          <div className="col-span-full p-12 text-center glass-panel rounded-3xl text-slate-400 border border-slate-800">
-            <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-white">No active incidents reported nearby</h3>
-            <p className="text-xs text-slate-400 mt-1">Your community is currently safe and clear.</p>
-          </div>
-        ) : (
-          incidents.map((incident) => (
-            <div
-              key={incident._id}
-              className="glass-card p-6 rounded-2xl border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase tracking-wider">
-                    {incident.category}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
-                    incident.status === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}>
-                    {incident.status}
-                  </span>
-                </div>
-
-                <h3 className="text-lg font-bold text-white mb-2">{incident.title}</h3>
-                <p className="text-xs text-slate-300 line-clamp-3 leading-relaxed mb-4">{incident.description}</p>
-              </div>
-
-              <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-blue-400" />
-                  {incident.location?.address || 'Pinned Location'}
-                </span>
-
-                <button
-                  onClick={() => handleUpvote(incident._id)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold transition-colors"
-                >
-                  <ThumbsUp className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{incident.upvotes?.length || 0} Confirmations</span>
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Modal dialog for submitting report */}
-      {showModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="w-full max-w-lg glass-panel p-6 rounded-3xl border border-slate-800 shadow-2xl relative">
-            <h3 className="text-xl font-bold text-white mb-4">Submit Community Safety Incident</h3>
-
-            <form onSubmit={handleCreateReport} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Unsafe road conditions / Harassment report"
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none"
-                  >
-                    <option value="HARASSMENT">Harassment</option>
-                    <option value="ACCIDENT">Accident</option>
-                    <option value="THEFT">Theft / Robbery</option>
-                    <option value="HAZARD">Road / Infra Hazard</option>
-                    <option value="SUSPICIOUS_ACTIVITY">Suspicious Activity</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Severity</label>
-                  <select
-                    value={severity}
-                    onChange={(e) => setSeverity(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none"
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                    <option value="CRITICAL">Critical</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Detailed Description</label>
-                <textarea
-                  required
-                  rows="3"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the situation clearly..."
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="w-1/2 py-2.5 rounded-xl font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-1/2 py-2.5 rounded-xl font-bold text-white bg-amber-600 hover:bg-amber-500 text-sm shadow-lg shadow-amber-600/30"
-                >
-                  {submitting ? 'Submitting...' : 'Post Incident'}
-                </button>
-              </div>
-            </form>
-          </div>
+      {/* Main Content Area: Grid or Map */}
+      {viewMode === 'map' ? (
+        <SafetyMap
+          center={[location.lat, location.lng]}
+          zoom={13}
+          userLocation={location}
+          markers={filteredAlerts.map(a => ({ ...a, category: 'INCIDENT' }))}
+          height="h-[600px]"
+        />
+      ) : loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <SkeletonCard rows={3} />
+          <SkeletonCard rows={3} />
+          <SkeletonCard rows={3} />
+        </div>
+      ) : filteredAlerts.length === 0 ? (
+        <EmptyState
+          icon={AlertTriangle}
+          title="No Alerts Found"
+          description="No community safety alerts match your current filter criteria."
+          actionLabel="Report New Alert"
+          onAction={() => setShowPostModal(true)}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAlerts.map((alertItem) => (
+            <AlertCard
+              key={alertItem._id}
+              alertItem={alertItem}
+              onViewDetails={(a) => setSelectedAlert(a)}
+              onFlagAlert={handleFlagAlert}
+            />
+          ))}
         </div>
       )}
+
+      {/* Alert Detail Modal */}
+      {selectedAlert && (
+        <AlertDetailModal
+          isOpen={Boolean(selectedAlert)}
+          onClose={() => setSelectedAlert(null)}
+          alertItem={selectedAlert}
+          onFlagAlert={handleFlagAlert}
+          onDeleteAlert={(a) => setAlertToDelete(a)}
+        />
+      )}
+
+      {/* Post Community Alert Modal */}
+      <Modal
+        isOpen={showPostModal}
+        onClose={() => setShowPostModal(false)}
+        title="Report Community Safety Alert"
+        subtitle="Broadcast a safety notice or hazard alert to nearby SafeSphere users"
+      >
+        {postError && (
+          <AlertBanner type="danger" onDismiss={() => setPostError('')} className="mb-4">
+            {postError}
+          </AlertBanner>
+        )}
+
+        <form onSubmit={handlePostAlert} className="space-y-4">
+          <Input
+            label="Alert Title"
+            required
+            value={postFormData.title}
+            onChange={(e) => setPostFormData({ ...postFormData, title: e.target.value })}
+            placeholder="e.g. Fallen Tree Blocking Main Road"
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Alert Category"
+              value={postFormData.category}
+              onChange={(e) => setPostFormData({ ...postFormData, category: e.target.value })}
+              options={categoriesList.map(c => ({ value: c, label: c }))}
+            />
+
+            <Select
+              label="Severity Level"
+              value={postFormData.severity}
+              onChange={(e) => setPostFormData({ ...postFormData, severity: e.target.value })}
+              options={[
+                { value: 'low', label: 'Low (Minor Notice)' },
+                { value: 'medium', label: 'Medium (Caution)' },
+                { value: 'high', label: 'High (Significant Hazard)' },
+                { value: 'critical', label: 'Critical (Immediate Danger)' }
+              ]}
+            />
+          </div>
+
+          <TextArea
+            label="Detailed Description"
+            required
+            rows={4}
+            value={postFormData.description}
+            onChange={(e) => setPostFormData({ ...postFormData, description: e.target.value })}
+            placeholder="Provide relevant details about what happened, exact landmark, and advice for neighbors..."
+          />
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center justify-between">
+            <span className="text-slate-500 font-semibold">Location Tag:</span>
+            <span className="font-bold text-slate-900">{location.address}</span>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-3 border-t border-slate-100">
+            <Button variant="secondary" onClick={() => setShowPostModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="danger" loading={posting}>
+              Broadcast Community Alert
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={Boolean(alertToDelete)}
+        onClose={() => setAlertToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Community Alert"
+        message={`Are you sure you want to delete "${alertToDelete?.title}"?`}
+        confirmText="Delete Alert"
+        cancelText="Cancel"
+        variant="danger"
+        loading={deleting}
+      />
 
     </div>
   );

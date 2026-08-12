@@ -1,11 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { getAlerts, createAlert, deleteAlert } = require('../controllers/alertController');
+const {
+  getAlerts,
+  createAlert,
+  getAlertById,
+  updateAlert,
+  deleteAlert,
+  flagAlert
+} = require('../controllers/alertController');
 const { protect } = require('../middlewares/authMiddleware');
-const { requireAdmin } = require('../middlewares/adminMiddleware');
 
 router.get('/', getAlerts);
-router.post('/', protect, requireAdmin, createAlert);
-router.delete('/:id', protect, requireAdmin, deleteAlert);
+router.post('/', protect, createAlert);
+
+router.get('/:id', getAlertById);
+router.put('/:id', protect, updateAlert);
+router.delete('/:id', protect, deleteAlert);
+
+router.post('/:id/flag', protect, flagAlert);
+router.post('/:id/report', protect, flagAlert);
 
 module.exports = router;
