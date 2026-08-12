@@ -61,10 +61,12 @@ app.use('/api/location', locationRoutes);
 app.use('/api/v1/sos', sosRoutes);
 app.use('/api/sos', sosRoutes);
 
+app.use('/api/v1/resources', resourceRoutes);
+app.use('/api/resources', resourceRoutes);
+
 app.use('/api/v1/incidents', incidentRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/journey', journeyRoutes);
-app.use('/api/v1/resources', resourceRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/admin', adminRoutes);
 

@@ -1,142 +1,185 @@
 import React, { useState, useEffect } from 'react';
-import API from '../services/api';
-import { BookOpen, PhoneCall, Shield, Hospital, Building2, MapPin, Search } from 'lucide-react';
+import PageHeader from '../components/layout/PageHeader';
+import ResourceCard from '../components/resources/ResourceCard';
 import { useLocation } from '../context/LocationContext';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import AlertBanner from '../components/ui/AlertBanner';
+import { SkeletonCard } from '../components/ui/LoadingSpinner';
+import EmptyState from '../components/ui/EmptyState';
+import ErrorState from '../components/ui/ErrorState';
+import API from '../services/api';
+import { 
+  PhoneCall, 
+  Search, 
+  MapPin, 
+  RefreshCw, 
+  Shield, 
+  HeartPulse, 
+  Pill, 
+  Flame, 
+  Truck, 
+  Navigation,
+  CheckCircle2
+} from 'lucide-react';
 
 export default function ResourcesPage() {
-  const { location } = useLocation();
-  const [hotlines, setHotlines] = useState([]);
-  const [nearby, setNearby] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const { location, loading: locLoading, error: locError, permissionStatus, requestLocation } = useLocation();
+
+  const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
 
-  const fetchResources = async () => {
+  const categories = [
+    { id: 'ALL', label: 'All Services', icon: PhoneCall },
+    { id: 'POLICE', label: 'Police Stations', icon: Shield },
+    { id: 'HOSPITAL', label: 'Hospitals / ER', icon: HeartPulse },
+    { id: 'PHARMACY', label: '24/7 Pharmacies', icon: Pill },
+    { id: 'FIRE', label: 'Fire Stations', icon: Flame },
+    { id: 'AMBULANCE', label: 'Ambulance EMS', icon: Truck }
+  ];
+
+  const fetchNearbyResources = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const hotlineRes = await API.get('/resources/hotlines');
-      if (hotlineRes.success) {
-        setHotlines(hotlineRes.data || []);
-      }
-
-      const nearbyRes = await API.get(`/resources/nearby?lat=${location.lat}&lng=${location.lng}&radiusKm=10`);
-      if (nearbyRes.success) {
-        setNearby(nearbyRes.data || []);
+      const res = await API.get(
+        `/resources/nearby?lat=${location.lat}&lng=${location.lng}&category=${selectedCategory}&radiusKm=25`
+      );
+      if (res.success) {
+        setResources(res.data || []);
       }
     } catch (err) {
-      console.warn('[ResourcesPage] Error:', err.message);
+      setError(err.message || 'Failed to load nearby emergency services');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchResources();
-  }, [location.lat, location.lng]);
+    fetchNearbyResources();
+  }, [location.lat, location.lng, selectedCategory]);
 
-  const filteredHotlines = hotlines.filter(h =>
-    h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    h.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    h.phone.includes(searchQuery)
+  // Client-side search filter
+  const filteredResources = resources.filter(
+    (r) =>
+      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.address.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="space-y-6">
       
-      {/* Header Bar */}
-      <div className="glass-panel p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-purple-400" />
-            Emergency Services & Helplines Directory
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            24/7 verified national toll-free emergency numbers, legal assistance helplines, and nearby emergency service points.
-          </p>
-        </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Nearby Emergency Assistance"
+        subtitle="Locate 24/7 Police Stations, ER Hospitals, Pharmacies, and Fire & Ambulance services near your position"
+        icon={PhoneCall}
+        badge={<Badge variant="emerald" size="sm">OpenStreetMap Verified Directory</Badge>}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            icon={RefreshCw}
+            loading={locLoading || loading}
+            onClick={() => {
+              requestLocation();
+              fetchNearbyResources();
+            }}
+          >
+            Refresh GPS Location
+          </Button>
+        }
+      />
 
-        {/* Search Bar */}
-        <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search hotlines..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-purple-500"
-          />
+      {/* Permission Denied Alert */}
+      {permissionStatus === 'denied' && (
+        <AlertBanner type="warning" title="Location Permission Denied">
+          Browser location access is blocked. Nearby assistance is currently sorted relative to default central coordinates. Enable location permissions in browser settings for exact distance calculation.
+        </AlertBanner>
+      )}
+
+      {/* Data Source Transparency Banner */}
+      <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-indigo-950">
+        <div className="flex items-center space-x-2">
+          <CheckCircle2 className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+          <span>
+            Showing emergency response places near <strong>{location.address}</strong>
+          </span>
         </div>
+        <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded bg-indigo-100 text-indigo-800">
+          Haversine GPS Precision
+        </span>
       </div>
 
-      {/* National Toll-Free Hotlines Section */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-          <PhoneCall className="w-5 h-5 text-red-400" />
-          National Emergency Helplines (24/7 Toll-Free)
-        </h2>
+      {/* Category Tabs Selector */}
+      <div className="flex flex-wrap gap-2">
+        {categories.map((cat) => {
+          const Icon = cat.icon;
+          const isSelected = selectedCategory === cat.id;
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredHotlines.map((hotline) => (
-            <div
-              key={hotline._id || hotline.name}
-              className="glass-card p-5 rounded-2xl border border-slate-800 hover:border-purple-500/40 transition-all flex items-center justify-between"
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center space-x-2 transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 ring-2 ring-indigo-400'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+              }`}
             >
-              <div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 uppercase">
-                  {hotline.category}
-                </span>
-                <h3 className="text-base font-bold text-white mt-1.5">{hotline.name}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Hours: {hotline.operatingHours}</p>
-              </div>
+              <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-indigo-600'}`} />
+              <span>{cat.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-              <a
-                href={`tel:${hotline.phone}`}
-                className="px-4 py-2.5 rounded-xl font-black text-sm text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/30 transition-all flex items-center space-x-1.5"
-              >
-                <PhoneCall className="w-4 h-4" />
-                <span>{hotline.phone}</span>
-              </a>
-            </div>
+      {/* Search Filter Input Bar */}
+      <div className="relative max-w-md">
+        <Input
+          icon={Search}
+          placeholder="Filter nearby stations by name or street..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
+      {/* Content State Engine */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <SkeletonCard rows={3} />
+          <SkeletonCard rows={3} />
+          <SkeletonCard rows={3} />
+        </div>
+      ) : error ? (
+        <ErrorState
+          title="Unable to Load Nearby Services"
+          message={error}
+          onRetry={fetchNearbyResources}
+        />
+      ) : filteredResources.length === 0 ? (
+        <EmptyState
+          icon={PhoneCall}
+          title={searchQuery ? 'No Matching Services Found' : 'No Emergency Stations Nearby'}
+          description={
+            searchQuery
+              ? `No emergency places matched "${searchQuery}". Try clearing your search filter.`
+              : 'No emergency assistance services registered within your radius.'
+          }
+          actionLabel={searchQuery ? 'Clear Filter' : 'Refresh Location'}
+          onAction={searchQuery ? () => setSearchQuery('') : fetchNearbyResources}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredResources.map((resource) => (
+            <ResourceCard key={resource._id || resource.name} resource={resource} />
           ))}
         </div>
-      </div>
-
-      {/* Nearby Emergency Services Section */}
-      <div className="space-y-4 pt-4 border-t border-slate-800">
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-blue-400" />
-          Nearby Local Emergency Services
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {nearby.map((res) => (
-            <div
-              key={res._id || res.name}
-              className="glass-card p-5 rounded-2xl border border-slate-800 hover:border-blue-500/40 transition-all space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
-                  res.category === 'POLICE' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                }`}>
-                  {res.category}
-                </span>
-                <span className="text-[10px] text-slate-400 font-semibold">{res.operatingHours}</span>
-              </div>
-
-              <div>
-                <h3 className="text-base font-bold text-white">{res.name}</h3>
-                <p className="text-xs text-slate-400 mt-1">{res.address}</p>
-              </div>
-
-              <a
-                href={`tel:${res.phone}`}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center justify-center space-x-1.5 transition-colors"
-              >
-                <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Call Station ({res.phone})</span>
-              </a>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
     </div>
   );

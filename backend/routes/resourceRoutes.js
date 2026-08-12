@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { getHotlines, getNearbyResources } = require('../controllers/resourceController');
+const { getNearbyResources, getHotlines } = require('../controllers/resourceController');
 
-router.get('/hotlines', getHotlines);
 router.get('/nearby', getNearbyResources);
+router.get('/hotlines', getHotlines);
 
 module.exports = router;
