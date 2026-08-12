@@ -111,10 +111,15 @@ export default function HomePage() {
   const handleConfirmSOS = async () => {
     setSosLoading(true);
     try {
+      const lat = location?.lat || 28.6139;
+      const lng = location?.lng || 77.2090;
+
       const res = await API.post('/sos/trigger', {
         emergencyType: selectedEmergencyType,
-        coordinates: [location.lng, location.lat],
-        address: location.address
+        latitude: lat,
+        longitude: lng,
+        coordinates: [lng, lat],
+        address: location?.address || 'Live Location'
       });
 
       if (res.success && res.data) {
@@ -127,10 +132,16 @@ export default function HomePage() {
         });
       }
     } catch (err) {
+      const errorMsg = err.message.includes('authorized') || err.message.includes('token')
+        ? 'You must be signed in to trigger an Emergency SOS Alert. Please log in first.'
+        : err.message.includes('Network') || err.message.includes('ECONNREFUSED')
+        ? 'Backend API server is offline. Please start the backend with npm run dev on port 5000.'
+        : err.message;
+
       addToast({
         type: 'error',
-        title: 'SOS Activation Failed',
-        message: err.message || 'Failed to trigger emergency SOS. Please try again.'
+        title: 'SOS Dispatch Error',
+        message: errorMsg
       });
     } finally {
       setSosLoading(false);

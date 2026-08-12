@@ -11,21 +11,25 @@ const triggerSOS = async (req, res, next) => {
   try {
     let { latitude, longitude, coordinates, address, message, notes, emergencyType } = req.body;
 
-    // Support both latitude/longitude and coordinates [lng, lat] format
+    // Support coordinates array [lng, lat]
     if (coordinates && Array.isArray(coordinates) && coordinates.length === 2) {
       longitude = coordinates[0];
       latitude = coordinates[1];
     }
 
-    if (latitude === undefined || longitude === undefined) {
-      return res.status(400).json({ success: false, message: 'Valid latitude and longitude coordinates are required' });
-    }
+    // Default Fallbacks if GPS coordinates are missing or invalid
+    let lat = parseFloat(latitude);
+    let lng = parseFloat(longitude);
 
-    const lat = parseFloat(latitude);
-    const lng = parseFloat(longitude);
-
-    if (isNaN(lat) || isNaN(lng)) {
-      return res.status(400).json({ success: false, message: 'Latitude and longitude must be valid numbers' });
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+      // Fallback to user's saved currentLocation in DB, or default coordinates
+      if (req.user?.currentLocation?.coordinates && req.user.currentLocation.coordinates.length === 2) {
+        lng = req.user.currentLocation.coordinates[0];
+        lat = req.user.currentLocation.coordinates[1];
+      } else {
+        lng = 77.2090;
+        lat = 28.6139;
+      }
     }
 
     // Check existing active SOS for this user
@@ -38,7 +42,7 @@ const triggerSOS = async (req, res, next) => {
       });
     }
 
-    // Check trusted contacts
+    // Retrieve user's trusted emergency contacts
     const contacts = await EmergencyContact.find({ userId: req.user._id });
     const contactIds = contacts.map(c => c._id);
 
@@ -80,7 +84,7 @@ const triggerSOS = async (req, res, next) => {
         const smsMessage = `🚨 [SafeSphere ALERT] ${req.user.name} triggered an Emergency ${sos.emergencyType} SOS! ` +
           `Location: https://maps.google.com/?q=${lat},${lng}. Contact: ${req.user.phone}`;
         const smsRes = await sendSMSAlert(contact.phone, smsMessage);
-        if (smsRes.mode) smsMode = smsRes.mode;
+        if (smsRes?.mode) smsMode = smsRes.mode;
       }
     }
 
@@ -153,7 +157,6 @@ const getSOSById = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'SOS event not found' });
     }
 
-    // Ensure user can access their own SOS event or admin
     if (!sos.user._id.equals(req.user._id) && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Access denied to this SOS record' });
     }
