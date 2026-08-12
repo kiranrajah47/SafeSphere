@@ -2,6 +2,7 @@ const SOSAlert = require('../models/SOSAlert');
 const User = require('../models/User');
 const EmergencyContact = require('../models/EmergencyContact');
 const { sendSMSAlert } = require('../services/smsService');
+const { notifySOSCreated, notifySOSResolved } = require('../services/notificationService');
 const { getIO } = require('../config/socket');
 
 // @desc    Trigger emergency SOS alert
@@ -94,6 +95,13 @@ const triggerSOS = async (req, res, next) => {
       dispatchedAt: new Date()
     };
     await sos.save();
+
+    // Dispatch In-App, SMS, and Email via Notification Service Abstraction
+    try {
+      await notifySOSCreated(sos, req.user, contacts);
+    } catch (nErr) {
+      console.warn('[Notification Service Call Failed]', nErr.message);
+    }
 
     // Broadcast WebSockets event
     try {
@@ -237,6 +245,13 @@ const resolveSOS = async (req, res, next) => {
     await sos.save();
 
     await User.findByIdAndUpdate(sos.user || sos.userId, { isSOSActive: false });
+
+    // Dispatch In-App / SMS / Email Notification via Notification Abstraction
+    try {
+      await notifySOSResolved(sos, req.user || { _id: sos.user || sos.userId });
+    } catch (nErr) {
+      console.warn('[Notification Resolve Service Call Failed]', nErr.message);
+    }
 
     try {
       const { emitGlobalEvent, getIO } = require('../config/socket');

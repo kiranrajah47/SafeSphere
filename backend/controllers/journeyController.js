@@ -253,10 +253,12 @@ const escalateJourney = async (req, res, next) => {
     journey.escalatedAt = new Date();
     await journey.save();
 
-    // Trigger SMS dispatch to emergency contact
-    if (journey.trustedContact && journey.trustedContact.phone) {
-      const msg = `🚨 [SafeSphere ESCALATION ALERT] ${req.user.name} was travelling to "${journey.destinationName}" and missed expected arrival check-in (${journey.expectedArrivalTime.toLocaleTimeString()}). Last Position: https://maps.google.com/?q=${journey.currentLocation.latitude},${journey.currentLocation.longitude}. Contact: ${req.user.phone}`;
-      sendSMSAlert(journey.trustedContact.phone, msg).catch(e => {});
+    // Trigger SMS dispatch & In-App / Email notification via Notification Service Abstraction
+    try {
+      const { notifyJourneyWarning } = require('../services/notificationService');
+      await notifyJourneyWarning(journey, req.user, journey.trustedContact);
+    } catch (nErr) {
+      console.warn('[Journey Notification Service Call Failed]', nErr.message);
     }
 
     try {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation as useGeoLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
+import NotificationCenter from './NotificationCenter';
 import { MapPin, PhoneCall, Bell, Menu, Shield, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -58,11 +59,8 @@ export default function TopNav({ onToggleMobileMenu, onTriggerSOSClick }) {
             <span>112 Hotline</span>
           </a>
 
-          {/* Notifications Bell */}
-          <button className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-600" />
-          </button>
+          {/* Notifications Bell Center */}
+          <NotificationCenter />
 
           {/* User Profile Avatar Pill */}
           {user && (

@@ -10,6 +10,7 @@ import Modal from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import API from '../services/api';
+import NotificationPreferencesSection from '../components/profile/NotificationPreferencesSection';
 import { 
   User, 
   Mail, 
@@ -24,7 +25,8 @@ import {
   KeyRound, 
   CheckCircle2, 
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  Bell
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -240,6 +242,7 @@ export default function ProfilePage() {
         {[
           { id: 'DETAILS', label: 'Account Details', icon: User },
           { id: 'MEDICAL', label: 'Emergency Medical Info', icon: HeartPulse },
+          { id: 'PREFERENCES', label: 'Notifications', icon: Bell },
           { id: 'PASSWORD', label: 'Change Password', icon: KeyRound },
           { id: 'CONTACTS', label: 'Emergency Contacts', icon: Users }
         ].map((tab) => {
@@ -462,6 +465,13 @@ export default function ProfilePage() {
 
           </CardContent>
         </Card>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: NOTIFICATION PREFERENCES */}
+      {/* ========================================================================= */}
+      {activeTab === 'PREFERENCES' && (
+        <NotificationPreferencesSection />
       )}
 
       {/* ========================================================================= */}

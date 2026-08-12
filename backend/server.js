@@ -22,6 +22,7 @@ const incidentRoutes = require('./routes/incidentRoutes');
 const journeyRoutes = require('./routes/journeyRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -78,6 +79,9 @@ app.use('/api/v1/ai', aiRoutes);
 
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
+
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);

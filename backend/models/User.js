@@ -25,7 +25,17 @@ const userSchema = new mongoose.Schema({
     coordinates: { type: [Number], default: [77.2090, 28.6139] }, // [lng, lat]
     lastUpdated: { type: Date, default: Date.now }
   },
-  isSOSActive: { type: Boolean, default: false }
+  isSOSActive: { type: Boolean, default: false },
+  notificationPreferences: {
+    inApp: { type: Boolean, default: true },
+    sms: { type: Boolean, default: true },
+    email: { type: Boolean, default: true },
+    sosAlerts: { type: Boolean, default: true },
+    communityAlerts: { type: Boolean, default: true },
+    journeyWarnings: { type: Boolean, default: true },
+    incidentUpdates: { type: Boolean, default: true },
+    resourceUpdates: { type: Boolean, default: true }
+  }
 }, {
   timestamps: true
 });
