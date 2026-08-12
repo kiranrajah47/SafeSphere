@@ -12,6 +12,7 @@ import JourneyPage from './pages/JourneyPage';
 import IncidentsPage from './pages/IncidentsPage';
 import ResourcesPage from './pages/ResourcesPage';
 import ContactsPage from './pages/ContactsPage';
+import SOSHistoryPage from './pages/SOSHistoryPage';
 import AIAssistantPage from './pages/AIAssistantPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
@@ -50,6 +51,7 @@ export default function App() {
                       <Route element={<ProtectedRoute />}>
                         <Route path="/" element={<HomePage />} />
                         <Route path="/contacts" element={<ContactsPage />} />
+                        <Route path="/sos/history" element={<SOSHistoryPage />} />
                         <Route path="/journey" element={<JourneyPage />} />
                         <Route path="/incidents" element={<IncidentsPage />} />
                         <Route path="/ai-assistant" element={<AIAssistantPage />} />

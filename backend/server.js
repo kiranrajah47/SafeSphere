@@ -45,7 +45,7 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
-// API Routes (Mounted under /api/v1 and /api for compatibility)
+// API Routes (Mounted under /api/v1 and /api for full compatibility)
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/auth', authRoutes);
 
@@ -55,6 +55,8 @@ app.use('/api/v1/contacts', contactRoutes);
 app.use('/api/contacts', contactRoutes);
 
 app.use('/api/v1/sos', sosRoutes);
+app.use('/api/sos', sosRoutes);
+
 app.use('/api/v1/incidents', incidentRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/journey', journeyRoutes);

@@ -5,65 +5,93 @@ const { sendSMSAlert } = require('../services/smsService');
 const { getIO } = require('../config/socket');
 
 // @desc    Trigger emergency SOS alert
-// @route   POST /api/v1/sos/trigger
+// @route   POST /api/v1/sos or /api/sos
 // @access  Private
 const triggerSOS = async (req, res, next) => {
   try {
-    const { emergencyType, coordinates, address, notes } = req.body;
+    let { latitude, longitude, coordinates, address, message, notes, emergencyType } = req.body;
 
-    if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
-      return res.status(400).json({ success: false, message: 'Valid coordinates array [longitude, latitude] is required' });
+    // Support both latitude/longitude and coordinates [lng, lat] format
+    if (coordinates && Array.isArray(coordinates) && coordinates.length === 2) {
+      longitude = coordinates[0];
+      latitude = coordinates[1];
     }
 
-    // Check if user already has an active SOS
-    const existingSOS = await SOSAlert.findOne({ userId: req.user._id, status: 'ACTIVE' });
-    if (existingSOS) {
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ success: false, message: 'Valid latitude and longitude coordinates are required' });
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({ success: false, message: 'Latitude and longitude must be valid numbers' });
+    }
+
+    // Check existing active SOS for this user
+    let sos = await SOSAlert.findOne({ user: req.user._id, status: { $in: ['active', 'ACTIVE'] } });
+    if (sos) {
       return res.status(200).json({
         success: true,
         message: 'Active SOS alert already running',
-        data: existingSOS
+        data: sos
       });
     }
 
-    const sos = await SOSAlert.create({
+    // Check trusted contacts
+    const contacts = await EmergencyContact.find({ userId: req.user._id });
+    const contactIds = contacts.map(c => c._id);
+
+    // Create SOS Document
+    sos = await SOSAlert.create({
+      user: req.user._id,
       userId: req.user._id,
+      status: 'active',
       emergencyType: emergencyType || 'PANIC',
+      message: message || notes || `${emergencyType || 'PANIC'} emergency distress signal!`,
+      notes: notes || message || '',
+      latitude: lat,
+      longitude: lng,
       location: {
         type: 'Point',
-        coordinates,
-        address: address || 'Emergency live location ping'
+        coordinates: [lng, lat],
+        address: address || `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
       },
-      locationHistory: [{ coordinates, timestamp: new Date() }],
-      notes: notes || ''
+      locationHistory: [{ latitude: lat, longitude: lng, coordinates: [lng, lat], timestamp: new Date() }],
+      contactsNotified: contactIds,
+      contactsNotifiedCount: contacts.length,
+      triggeredAt: new Date()
     });
 
-    // Update user state
+    // Update user state in database
     await User.findByIdAndUpdate(req.user._id, {
       isSOSActive: true,
       currentLocation: {
         type: 'Point',
-        coordinates,
+        coordinates: [lng, lat],
         lastUpdated: new Date()
       }
     });
 
-    // Notify Emergency Contacts via SMS Mock
-    const contacts = await EmergencyContact.find({ userId: req.user._id });
-    let notifiedCount = 0;
-
+    // Notify contacts via SMS Service (Twilio or Mock console)
+    let smsMode = 'MOCK_CONSOLE';
     for (const contact of contacts) {
-      if (contact.notifyViaSMS && contact.phone) {
-        const message = `🚨 EMERGENCY SOS ALERT! ${req.user.name} has triggered a ${sos.emergencyType} alert. ` +
-          `Location: https://maps.google.com/?q=${coordinates[1]},${coordinates[0]}. Contact: ${req.user.phone}`;
-        await sendSMSAlert(contact.phone, message);
-        notifiedCount++;
+      if (contact.phone) {
+        const smsMessage = `🚨 [SafeSphere ALERT] ${req.user.name} triggered an Emergency ${sos.emergencyType} SOS! ` +
+          `Location: https://maps.google.com/?q=${lat},${lng}. Contact: ${req.user.phone}`;
+        const smsRes = await sendSMSAlert(contact.phone, smsMessage);
+        if (smsRes.mode) smsMode = smsRes.mode;
       }
     }
 
-    sos.contactsNotifiedCount = notifiedCount;
+    sos.notificationResult = {
+      mode: smsMode,
+      status: smsMode === 'TWILIO' ? 'DISPATCHED' : 'SIMULATED_MOCK_CONSOLE',
+      dispatchedAt: new Date()
+    };
     await sos.save();
 
-    // Broadcast via Socket.IO
+    // Broadcast WebSockets event
     try {
       const io = getIO();
       const payload = {
@@ -75,15 +103,15 @@ const triggerSOS = async (req, res, next) => {
           medicalInfo: req.user.medicalInfo
         }
       };
-      io.to('admin_room').emit('sos_alert_created', payload);
-      io.to(`user_${req.user._id}`).emit('sos_alert_created', payload);
+      io.to('admin_room').emit('sos_created', payload);
+      io.to(`user_${req.user._id}`).emit('sos_created', payload);
     } catch (e) {
       console.warn('[Socket Broadcast Warning]', e.message);
     }
 
     return res.status(201).json({
       success: true,
-      message: 'SOS Emergency Alert triggered successfully',
+      message: 'Emergency SOS triggered successfully',
       data: sos
     });
   } catch (error) {
@@ -91,47 +119,43 @@ const triggerSOS = async (req, res, next) => {
   }
 };
 
-// @desc    Ping location updates for active SOS
-// @route   POST /api/v1/sos/ping
+// @desc    Get SOS history for authenticated user
+// @route   GET /api/v1/sos/history or /api/sos/history
 // @access  Private
-const pingLocation = async (req, res, next) => {
+const getSOSHistory = async (req, res, next) => {
   try {
-    const { coordinates, address } = req.body;
+    const history = await SOSAlert.find({
+      $or: [{ user: req.user._id }, { userId: req.user._id }]
+    })
+    .sort({ triggeredAt: -1 })
+    .limit(50);
 
-    if (!coordinates || !Array.isArray(coordinates) || coordinates.length !== 2) {
-      return res.status(400).json({ success: false, message: 'Valid coordinates array [lng, lat] is required' });
-    }
-
-    const sos = await SOSAlert.findOne({ userId: req.user._id, status: 'ACTIVE' });
-    if (!sos) {
-      return res.status(404).json({ success: false, message: 'No active SOS alert found for user' });
-    }
-
-    sos.location = {
-      type: 'Point',
-      coordinates,
-      address: address || sos.location.address
-    };
-    sos.locationHistory.push({ coordinates, timestamp: new Date() });
-    await sos.save();
-
-    // Update user model location
-    await User.findByIdAndUpdate(req.user._id, {
-      currentLocation: {
-        type: 'Point',
-        coordinates,
-        lastUpdated: new Date()
-      }
+    return res.json({
+      success: true,
+      count: history.length,
+      data: history
     });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    // Broadcast socket live position ping
-    try {
-      const io = getIO();
-      const updateData = { sosId: sos._id, userId: req.user._id, coordinates, address };
-      io.to(`sos_${sos._id}`).emit('sos_location_updated', updateData);
-      io.to('admin_room').emit('sos_location_updated', updateData);
-    } catch (e) {
-      // Ignore socket error in tests
+// @desc    Get single SOS event details by ID
+// @route   GET /api/v1/sos/:id or /api/sos/:id
+// @access  Private
+const getSOSById = async (req, res, next) => {
+  try {
+    const sos = await SOSAlert.findById(req.params.id)
+      .populate('user', 'name phone email medicalInfo')
+      .populate('contactsNotified', 'name phone relationship');
+
+    if (!sos) {
+      return res.status(404).json({ success: false, message: 'SOS event not found' });
+    }
+
+    // Ensure user can access their own SOS event or admin
+    if (!sos.user._id.equals(req.user._id) && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied to this SOS record' });
     }
 
     return res.json({
@@ -143,17 +167,25 @@ const pingLocation = async (req, res, next) => {
   }
 };
 
-// @desc    Cancel active SOS (User initiated)
-// @route   POST /api/v1/sos/cancel
+// @desc    Cancel active SOS event
+// @route   PUT /api/v1/sos/:id/cancel or /api/sos/:id/cancel
 // @access  Private
 const cancelSOS = async (req, res, next) => {
   try {
-    const sos = await SOSAlert.findOne({ userId: req.user._id, status: 'ACTIVE' });
-    if (!sos) {
-      return res.status(404).json({ success: false, message: 'No active SOS alert to cancel' });
+    const sosId = req.params.id !== 'cancel' ? req.params.id : null;
+    
+    let sos;
+    if (sosId) {
+      sos = await SOSAlert.findOne({ _id: sosId, user: req.user._id });
+    } else {
+      sos = await SOSAlert.findOne({ user: req.user._id, status: { $in: ['active', 'ACTIVE'] } });
     }
 
-    sos.status = 'CANCELLED';
+    if (!sos) {
+      return res.status(404).json({ success: false, message: 'No active SOS event found to cancel' });
+    }
+
+    sos.status = 'cancelled';
     sos.resolvedAt = new Date();
     sos.resolvedBy = req.user._id;
     await sos.save();
@@ -162,13 +194,13 @@ const cancelSOS = async (req, res, next) => {
 
     try {
       const io = getIO();
-      io.to('admin_room').emit('sos_alert_cancelled', { sosId: sos._id, userId: req.user._id });
-      io.to(`user_${req.user._id}`).emit('sos_alert_cancelled', { sosId: sos._id });
+      io.to('admin_room').emit('sos_cancelled', { sosId: sos._id, userId: req.user._id });
+      io.to(`user_${req.user._id}`).emit('sos_cancelled', { sosId: sos._id });
     } catch (e) {}
 
     return res.json({
       success: true,
-      message: 'SOS Alert cancelled successfully',
+      message: 'SOS event cancelled successfully',
       data: sos
     });
   } catch (error) {
@@ -176,34 +208,40 @@ const cancelSOS = async (req, res, next) => {
   }
 };
 
-// @desc    Resolve active SOS (User or Admin)
-// @route   POST /api/v1/sos/resolve
+// @desc    Resolve active SOS event
+// @route   PUT /api/v1/sos/:id/resolve or /api/sos/:id/resolve
 // @access  Private
 const resolveSOS = async (req, res, next) => {
   try {
-    const { sosId } = req.body;
-    const sos = await SOSAlert.findById(sosId || req.body.id);
+    const sosId = req.params.id !== 'resolve' ? req.params.id : req.body.sosId;
 
-    if (!sos) {
-      return res.status(404).json({ success: false, message: 'SOS record not found' });
+    let sos;
+    if (sosId) {
+      sos = await SOSAlert.findById(sosId);
+    } else {
+      sos = await SOSAlert.findOne({ user: req.user._id, status: { $in: ['active', 'ACTIVE'] } });
     }
 
-    sos.status = 'RESOLVED';
+    if (!sos) {
+      return res.status(404).json({ success: false, message: 'SOS event record not found' });
+    }
+
+    sos.status = 'resolved';
     sos.resolvedAt = new Date();
     sos.resolvedBy = req.user._id;
     await sos.save();
 
-    await User.findByIdAndUpdate(sos.userId, { isSOSActive: false });
+    await User.findByIdAndUpdate(sos.user || sos.userId, { isSOSActive: false });
 
     try {
       const io = getIO();
-      io.to('admin_room').emit('sos_alert_resolved', { sosId: sos._id });
-      io.to(`user_${sos.userId}`).emit('sos_alert_resolved', { sosId: sos._id });
+      io.to('admin_room').emit('sos_resolved', { sosId: sos._id });
+      io.to(`user_${sos.user || sos.userId}`).emit('sos_resolved', { sosId: sos._id });
     } catch (e) {}
 
     return res.json({
       success: true,
-      message: 'SOS Alert marked as resolved',
+      message: 'SOS event marked as resolved',
       data: sos
     });
   } catch (error) {
@@ -211,15 +249,14 @@ const resolveSOS = async (req, res, next) => {
   }
 };
 
-// @desc    Get active SOS list or current user's active SOS
-// @route   GET /api/v1/sos/active
+// @desc    Get active SOS for current user or global active list for admin
+// @route   GET /api/v1/sos/active or /api/sos/active
 // @access  Private
 const getActiveSOS = async (req, res, next) => {
   try {
-    // If Admin/Responder, return all active SOS
     if (req.user.role === 'admin' || req.user.role === 'responder') {
-      const activeAlerts = await SOSAlert.find({ status: 'ACTIVE' })
-        .populate('userId', 'name phone email medicalInfo currentLocation')
+      const activeAlerts = await SOSAlert.find({ status: { $in: ['active', 'ACTIVE'] } })
+        .populate('user', 'name phone email medicalInfo currentLocation')
         .sort({ triggeredAt: -1 });
 
       return res.json({
@@ -229,11 +266,10 @@ const getActiveSOS = async (req, res, next) => {
       });
     }
 
-    // Standard user returns their own active SOS
-    const userSOS = await SOSAlert.findOne({ userId: req.user._id, status: 'ACTIVE' });
+    const activeSOS = await SOSAlert.findOne({ user: req.user._id, status: { $in: ['active', 'ACTIVE'] } });
     return res.json({
       success: true,
-      data: userSOS
+      data: activeSOS
     });
   } catch (error) {
     next(error);
@@ -242,7 +278,8 @@ const getActiveSOS = async (req, res, next) => {
 
 module.exports = {
   triggerSOS,
-  pingLocation,
+  getSOSHistory,
+  getSOSById,
   cancelSOS,
   resolveSOS,
   getActiveSOS
