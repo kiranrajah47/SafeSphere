@@ -97,7 +97,7 @@ const triggerSOS = async (req, res, next) => {
 
     // Broadcast WebSockets event
     try {
-      const io = getIO();
+      const { emitGlobalEvent, getIO } = require('../config/socket');
       const payload = {
         sos,
         user: {
@@ -107,6 +107,8 @@ const triggerSOS = async (req, res, next) => {
           medicalInfo: req.user.medicalInfo
         }
       };
+      emitGlobalEvent('sos-created', payload);
+      const io = getIO();
       io.to('admin_room').emit('sos_created', payload);
       io.to(`user_${req.user._id}`).emit('sos_created', payload);
     } catch (e) {
@@ -237,6 +239,9 @@ const resolveSOS = async (req, res, next) => {
     await User.findByIdAndUpdate(sos.user || sos.userId, { isSOSActive: false });
 
     try {
+      const { emitGlobalEvent, getIO } = require('../config/socket');
+      emitGlobalEvent('sos-resolved', { sosId: sos._id, userId: sos.user || sos.userId });
+      emitGlobalEvent('sos-cancelled', { sosId: sos._id, userId: sos.user || sos.userId });
       const io = getIO();
       io.to('admin_room').emit('sos_resolved', { sosId: sos._id });
       io.to(`user_${sos.user || sos.userId}`).emit('sos_resolved', { sosId: sos._id });

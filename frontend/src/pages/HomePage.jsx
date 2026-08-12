@@ -105,7 +105,7 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [user, location.lat, location.lng]);
+  }, [user, location.lat, location.lng, realtimeEventCounter]);
 
   // Execute SOS Trigger
   const handleConfirmSOS = async () => {

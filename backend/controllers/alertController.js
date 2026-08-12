@@ -170,8 +170,8 @@ const createAlert = async (req, res, next) => {
 
     // Broadcast WebSockets event
     try {
-      const io = getIO();
-      io.emit('alert_created', populated);
+      const { emitGlobalEvent } = require('../config/socket');
+      emitGlobalEvent('alert-created', populated);
     } catch (e) {}
 
     return res.status(201).json({
@@ -230,6 +230,11 @@ const updateAlert = async (req, res, next) => {
     if (status) alert.status = status.toLowerCase();
 
     const updatedAlert = await alert.save();
+
+    try {
+      const { emitGlobalEvent } = require('../config/socket');
+      emitGlobalEvent('alert-updated', updatedAlert);
+    } catch (e) {}
 
     return res.json({
       success: true,

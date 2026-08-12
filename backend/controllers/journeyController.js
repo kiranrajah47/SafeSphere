@@ -76,6 +76,8 @@ const startJourney = async (req, res, next) => {
     const populated = await journey.populate('trustedContact', 'name phone relationship');
 
     try {
+      const { emitGlobalEvent, getIO } = require('../config/socket');
+      emitGlobalEvent('journey-started', populated);
       const io = getIO();
       io.to(`user_${req.user._id}`).emit('journey_started', populated);
     } catch (e) {}
@@ -258,6 +260,8 @@ const escalateJourney = async (req, res, next) => {
     }
 
     try {
+      const { emitGlobalEvent, getIO } = require('../config/socket');
+      emitGlobalEvent('journey-warning', { journey, user: { _id: req.user._id, name: req.user.name, phone: req.user.phone } });
       const io = getIO();
       io.to('admin_room').emit('journey_escalated', { journey, user: req.user });
       io.to(`user_${req.user._id}`).emit('journey_escalated', journey);

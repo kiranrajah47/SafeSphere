@@ -96,7 +96,7 @@ export default function IncidentsPage() {
 
   useEffect(() => {
     fetchAlerts();
-  }, [location.lat, location.lng, categoryFilter, severityFilter, timeFilter, radiusKm]);
+  }, [location.lat, location.lng, categoryFilter, severityFilter, timeFilter, radiusKm, realtimeEventCounter]);
 
   // Submit New Community Alert
   const handlePostAlert = async (e) => {

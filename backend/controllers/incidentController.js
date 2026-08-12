@@ -218,6 +218,11 @@ const updateIncidentStatus = async (req, res, next) => {
     await report.save();
 
     try {
+      const { emitGlobalEvent, getIO } = require('../config/socket');
+      if (report.status === 'verified') {
+        emitGlobalEvent('incident-verified', report);
+      }
+      emitGlobalEvent('incident-status-updated', { reportId: report._id, status: report.status });
       const io = getIO();
       io.emit('incident_status_updated', { reportId: report._id, status: report.status });
     } catch (e) {}
