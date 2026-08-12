@@ -8,15 +8,13 @@ const { getIO } = require('../config/socket');
 // @access  Private
 const startJourney = async (req, res, next) => {
   try {
-    let { destinationName, estimatedDurationMinutes, contactId, latitude, longitude, address } = req.body;
+    let { destinationName, estimatedDurationMinutes, expectedDurationMinutes, contactId, trustedContactId, guardianId, latitude, longitude, address } = req.body;
 
-    if (!destinationName || !estimatedDurationMinutes) {
+    const durationMins = parseInt(estimatedDurationMinutes || expectedDurationMinutes, 10);
+    const targetContactId = contactId || trustedContactId || guardianId;
+
+    if (!destinationName || isNaN(durationMins) || durationMins <= 0) {
       return res.status(400).json({ success: false, message: 'Destination name and estimated duration in minutes are required' });
-    }
-
-    const durationMins = parseInt(estimatedDurationMinutes, 10);
-    if (isNaN(durationMins) || durationMins <= 0) {
-      return res.status(400).json({ success: false, message: 'Duration must be a positive number of minutes' });
     }
 
     // Check if user already has an active journey running
@@ -38,8 +36,8 @@ const startJourney = async (req, res, next) => {
     const expectedArrival = new Date(Date.now() + durationMins * 60 * 1000);
 
     let contact = null;
-    if (contactId) {
-      contact = await EmergencyContact.findOne({ _id: contactId, userId: req.user._id });
+    if (targetContactId) {
+      contact = await EmergencyContact.findOne({ _id: targetContactId, userId: req.user._id });
     }
 
     const journey = await SafeJourney.create({
