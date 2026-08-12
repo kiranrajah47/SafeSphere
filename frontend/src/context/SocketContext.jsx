@@ -18,8 +18,10 @@ export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
 
   // useToast is safe because ToastProvider wraps SocketProvider in App.jsx
-  const toastCtx = useToast();
-  const addToast = toastCtx?.addToast || (() => {});
+  const addToastRef = useRef(addToast);
+  useEffect(() => {
+    addToastRef.current = addToast;
+  }, [addToast]);
 
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -100,7 +102,7 @@ export const SocketProvider = ({ children }) => {
         return; // Skip duplicate toast for creator
       }
 
-      addToast({
+      addToastRef.current?.({
         type: 'error',
         title: '🚨 Emergency SOS Activated',
         message: `${data?.user?.name || 'A user'} triggered an SOS near ${data?.sos?.location?.address || 'your area'}.`,
@@ -117,7 +119,7 @@ export const SocketProvider = ({ children }) => {
       setActiveSOSAlerts(prev => prev.filter(a => (a.sos?._id || a._id) !== sosId));
       bump();
 
-      addToast({
+      addToastRef.current?.({
         type: 'success',
         title: 'Emergency SOS Resolved',
         message: 'The emergency SOS has been safely resolved.',
@@ -134,7 +136,7 @@ export const SocketProvider = ({ children }) => {
       setLatestCommunityAlert(alert);
       bump();
 
-      addToast({
+      addToastRef.current?.({
         type: 'warning',
         title: `⚠️ Safety Alert: ${alert?.title || 'New Alert'}`,
         message: `New ${alert?.severity?.toUpperCase() || 'MEDIUM'} severity ${alert?.category || ''} alert near ${alert?.address || 'your area'}.`,
@@ -155,7 +157,7 @@ export const SocketProvider = ({ children }) => {
       console.log('[Socket] incident-verified', report);
       bump();
 
-      addToast({
+      addToastRef.current?.({
         type: 'info',
         title: 'Verified Alert Published',
         message: `Moderators verified "${report?.title || 'an incident'}" as a community safety alert.`,
@@ -176,7 +178,7 @@ export const SocketProvider = ({ children }) => {
       console.log('[Socket] journey-warning', data);
       bump();
 
-      addToast({
+      addToastRef.current?.({
         type: 'error',
         title: '🚨 Safe Journey Warning',
         message: `Trip to "${data?.journey?.destinationName || 'destination'}" has exceeded expected arrival time.`,
@@ -209,7 +211,7 @@ export const SocketProvider = ({ children }) => {
       });
       socketInstance.disconnect();
     };
-  }, [user?._id, addToast, bump, shouldProcessEvent]);
+  }, [user?._id, bump, shouldProcessEvent]);
 
   const dismissCommunityAlert = useCallback(() => {
     setLatestCommunityAlert(null);

@@ -13,6 +13,7 @@ router.get('/', getIncidentReports);
 router.post('/', protect, submitIncidentReport);
 
 router.get('/:id', getIncidentById);
+router.put('/:id', protect, adminCheck, updateIncidentStatus);
 router.put('/:id/status', protect, adminCheck, updateIncidentStatus);
 router.delete('/:id', protect, deleteIncident);
 
