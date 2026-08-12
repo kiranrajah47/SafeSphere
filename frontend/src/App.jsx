@@ -3,8 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
 import { SocketProvider } from './context/SocketContext';
-import Navbar from './components/common/Navbar';
-import BroadcastBanner from './components/common/BroadcastBanner';
+import DashboardLayout from './components/layout/DashboardLayout';
 import { ProtectedRoute, AdminRoute } from './components/common/ProtectedRoute';
 
 import HomePage from './pages/HomePage';
@@ -25,44 +24,42 @@ export default function App() {
       <LocationProvider>
         <SocketProvider>
           <Router>
-            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-red-500 selection:text-white">
-              <Navbar />
-              <BroadcastBanner />
-              
-              <main className="flex-1">
-                <Routes>
-                  {/* Public Routes */}
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/register" element={<RegisterPage />} />
-                  <Route path="/map" element={<MapPage />} />
-                  <Route path="/resources" element={<ResourcesPage />} />
+            <Routes>
+              {/* Auth Pages (Outside Main Layout) */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
 
-                  {/* Protected Routes for Authenticated Users */}
-                  <Route element={<ProtectedRoute />}>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/journey" element={<JourneyPage />} />
-                    <Route path="/incidents" element={<IncidentsPage />} />
-                    <Route path="/ai-assistant" element={<AIAssistantPage />} />
-                    <Route path="/profile" element={<ProfilePage />} />
-                  </Route>
+              {/* Main Application Routes (Inside Professional Dashboard Layout) */}
+              <Route
+                path="*"
+                element={
+                  <DashboardLayout>
+                    <Routes>
+                      {/* Public Dashboard Pages */}
+                      <Route path="/map" element={<MapPage />} />
+                      <Route path="/resources" element={<ResourcesPage />} />
 
-                  {/* Admin Protected Routes */}
-                  <Route element={<AdminRoute />}>
-                    <Route path="/admin" element={<AdminPage />} />
-                  </Route>
+                      {/* Protected Routes for Logged In Users */}
+                      <Route element={<ProtectedRoute />}>
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/journey" element={<JourneyPage />} />
+                        <Route path="/incidents" element={<IncidentsPage />} />
+                        <Route path="/ai-assistant" element={<AIAssistantPage />} />
+                        <Route path="/profile" element={<ProfilePage />} />
+                      </Route>
 
-                  {/* 404 Fallback */}
-                  <Route path="*" element={<NotFoundPage />} />
-                </Routes>
-              </main>
+                      {/* Admin Protected Routes */}
+                      <Route element={<AdminRoute />}>
+                        <Route path="/admin" element={<AdminPage />} />
+                      </Route>
 
-              <footer className="py-6 border-t border-slate-800/80 bg-slate-950/80 text-center text-xs text-slate-500">
-                <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-                  <p>© {new Date().getFullYear()} SafeSphere. Universal Personal Safety & Emergency Assistance Platform.</p>
-                  <p className="font-semibold text-slate-400">Major Academic Project Implementation</p>
-                </div>
-              </footer>
-            </div>
+                      {/* 404 Fallback */}
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </DashboardLayout>
+                }
+              />
+            </Routes>
           </Router>
         </SocketProvider>
       </LocationProvider>
