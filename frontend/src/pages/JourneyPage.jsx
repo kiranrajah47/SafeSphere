@@ -18,14 +18,7 @@ import API from '../services/api';
 import { 
   Navigation, 
   MapPin, 
-  Clock, 
-  User, 
-  ShieldCheck, 
-  Radio, 
-  CheckCircle2, 
-  XCircle, 
-  Info,
-  Plus
+  Clock
 } from 'lucide-react';
 
 export default function JourneyPage() {

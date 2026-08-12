@@ -12,8 +12,6 @@ import AlertBanner from '../components/ui/AlertBanner';
 import Modal from '../components/ui/Modal';
 import ConfirmationDialog from '../components/ui/ConfirmationDialog';
 import Input from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
-import { LoadingSpinner, SkeletonCard } from '../components/ui/LoadingSpinner';
 import EmptyState from '../components/ui/EmptyState';
 import SOSActiveModal from '../components/sos/SOSActiveModal';
 import API from '../services/api';
@@ -25,20 +23,14 @@ import {
   PhoneCall, 
   Navigation, 
   AlertTriangle, 
-  BookOpen, 
-  Bot, 
   Radio, 
   Plus, 
   RefreshCw, 
   Clock, 
-  CheckCircle2, 
   Activity, 
   ArrowRight,
-  Sparkles,
-  Phone,
   Flame,
-  HeartPulse,
-  Info
+  HeartPulse
 } from 'lucide-react';
 
 export default function HomePage() {

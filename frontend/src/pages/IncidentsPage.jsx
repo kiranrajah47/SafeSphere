@@ -21,14 +21,8 @@ import {
   AlertTriangle, 
   Plus, 
   Search, 
-  MapPin, 
-  Filter, 
-  Layers, 
   List, 
-  Map as MapIcon, 
-  Clock, 
-  CheckCircle2, 
-  ShieldAlert 
+  Map as MapIcon
 } from 'lucide-react';
 
 export default function IncidentsPage() {
