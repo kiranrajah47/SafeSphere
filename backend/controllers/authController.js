@@ -280,10 +280,25 @@ const getMe = async (req, res, next) => {
   }
 };
 
+// @desc    Logout user / clear active session
+// @route   POST /api/v1/auth/logout or /api/auth/logout
+// @access  Public (or Private)
+const logoutUser = async (req, res, next) => {
+  try {
+    return res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   registerUser,
   verifyOTP,
   loginUser,
+  logoutUser,
   forgotPassword,
   resetPassword,
   getMe

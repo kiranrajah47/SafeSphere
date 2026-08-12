@@ -17,5 +17,7 @@ const aiLimiter = rateLimit({
 });
 
 router.post('/safety-advice', protect, aiLimiter, askSafetyAdvice);
+router.post('/chat', protect, aiLimiter, askSafetyAdvice);
+router.post('/', protect, aiLimiter, askSafetyAdvice);
 
 module.exports = router;

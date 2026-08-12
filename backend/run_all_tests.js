@@ -293,6 +293,27 @@ async function runMasterBackendTestSuite() {
   assert(notifFeed.status === 200 && Array.isArray(notifFeed.data.data), 'Fetch In-App Notifications Feed (GET /api/v1/notifications)');
 
   // ------------------------------------------------------------------
+  // 8. DIRECTORY, DASHBOARD & HEALTH APIS
+  // ------------------------------------------------------------------
+  console.log('\n--- 8. Directory, Dashboard & Health APIs ---');
+
+  const healthRes = await makeRequest({
+    hostname: '127.0.0.1', port: 5000, path: '/api/health', method: 'GET'
+  });
+  assert(healthRes.status === 200 && healthRes.data.database === 'connected', 'Health Check Endpoint (GET /api/health)');
+
+  const dirRes = await makeRequest({
+    hostname: '127.0.0.1', port: 5000, path: '/api/directory', method: 'GET'
+  });
+  assert(dirRes.status === 200 && Array.isArray(dirRes.data.data), 'Fetch Directory Entries (GET /api/directory)');
+
+  const dashRes = await makeRequest({
+    hostname: '127.0.0.1', port: 5000, path: '/api/dashboard', method: 'GET',
+    headers: { 'Authorization': `Bearer ${userToken}` }
+  });
+  assert(dashRes.status === 200 && dashRes.data.data?.user, 'Fetch User Dashboard Summary (GET /api/dashboard)');
+
+  // ------------------------------------------------------------------
   // TEST SUMMARY RESULTS
   // ------------------------------------------------------------------
   console.log('\n================================================================');

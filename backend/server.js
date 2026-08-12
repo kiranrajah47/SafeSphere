@@ -23,6 +23,8 @@ const journeyRoutes = require('./routes/journeyRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const directoryRoutes = require('./routes/directoryRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -38,14 +40,21 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' })); // Support base64 profile image uploads up to 10MB
 
 // Health Check API
-app.get('/api/v1/health', (req, res) => {
+const healthHandler = (req, res) => {
+  const mongoose = require('mongoose');
   res.json({
+    success: true,
+    message: 'SafeSphere backend is running',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     status: 'OK',
     app: 'SafeSphere Backend API',
     timestamp: new Date(),
     environment: process.env.NODE_ENV || 'development'
   });
-});
+};
+
+app.get('/api/v1/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // API Routes (Mounted under /api/v1 and /api for full compatibility)
 app.use('/api/v1/auth', authRoutes);
@@ -74,8 +83,17 @@ app.use('/api/incidents', incidentRoutes);
 
 app.use('/api/v1/journey', journeyRoutes);
 app.use('/api/journey', journeyRoutes);
+app.use('/api/v1/journeys', journeyRoutes);
+app.use('/api/journeys', journeyRoutes);
+
+app.use('/api/v1/directory', directoryRoutes);
+app.use('/api/directory', directoryRoutes);
+
+app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.use('/api/v1/ai', aiRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
