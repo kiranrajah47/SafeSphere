@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { useToast } from '../components/ui/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import PageHeader from '../components/layout/PageHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -44,6 +45,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const { location, requestLocation } = useLocation();
   const { addToast } = useToast();
+  const { realtimeEventCounter } = useSocket();
 
   // State Management
   const [activeSOS, setActiveSOS] = useState(null);
@@ -76,7 +78,7 @@ export default function HomePage() {
         if (sosRes.success) setActiveSOS(sosRes.data || null);
 
         // 2. Fetch User Emergency Contacts
-        const contactsRes = await API.get('/users/contacts');
+        const contactsRes = await API.get('/contacts');
         if (contactsRes.success) setContacts(contactsRes.data || []);
 
         // 3. Fetch Active Safe Journey
@@ -187,7 +189,7 @@ export default function HomePage() {
     e.preventDefault();
     setAddingContact(true);
     try {
-      const res = await API.post('/users/contacts', {
+      const res = await API.post('/contacts', {
         name: newContactName,
         relationship: newContactRelation,
         phone: newContactPhone

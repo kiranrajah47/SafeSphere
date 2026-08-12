@@ -138,9 +138,5 @@ function DashboardLayoutContent({ children }) {
 }
 
 export default function DashboardLayout({ children }) {
-  return (
-    <ToastProvider>
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
-    </ToastProvider>
-  );
+  return <DashboardLayoutContent>{children}</DashboardLayoutContent>;
 }

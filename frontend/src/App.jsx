@@ -1,8 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ToastProvider } from './components/ui/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import { LocationProvider } from './context/LocationContext';
 import { SocketProvider } from './context/SocketContext';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import DashboardLayout from './components/layout/DashboardLayout';
 import { ProtectedRoute, AdminRoute } from './components/common/ProtectedRoute';
 
@@ -26,55 +28,61 @@ import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <LocationProvider>
-        <SocketProvider>
-          <Router>
-            <Routes>
-              {/* Standalone Authentication Routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/verify-otp" element={<VerifyOTPPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <LocationProvider>
+            <SocketProvider>
+              <Router>
+                <Routes>
+                  {/* Standalone Authentication Routes */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/verify-otp" element={<VerifyOTPPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-              {/* Main Application Routes (Inside Professional Dashboard Layout) */}
-              <Route
-                path="*"
-                element={
-                  <DashboardLayout>
-                    <Routes>
-                      {/* Public Dashboard Pages */}
-                      <Route path="/map" element={<MapPage />} />
-                      <Route path="/resources" element={<ResourcesPage />} />
+                  {/* Main Application Routes (Inside Professional Dashboard Layout) */}
+                  <Route
+                    path="*"
+                    element={
+                      <ErrorBoundary>
+                        <DashboardLayout>
+                          <Routes>
+                            {/* Public Dashboard Pages */}
+                            <Route path="/map" element={<MapPage />} />
+                            <Route path="/resources" element={<ResourcesPage />} />
 
-                      {/* Protected Routes for Logged In Users */}
-                      <Route element={<ProtectedRoute />}>
-                        <Route path="/" element={<HomePage />} />
-                        <Route path="/contacts" element={<ContactsPage />} />
-                        <Route path="/sos/history" element={<SOSHistoryPage />} />
-                        <Route path="/journey" element={<JourneyPage />} />
-                        <Route path="/incidents" element={<IncidentsPage />} />
-                        <Route path="/incidents/report" element={<ReportIncidentPage />} />
-                        <Route path="/ai-assistant" element={<AIAssistantPage />} />
-                        <Route path="/profile" element={<ProfilePage />} />
-                      </Route>
+                            {/* Protected Routes for Logged In Users */}
+                            <Route element={<ProtectedRoute />}>
+                              <Route path="/" element={<HomePage />} />
+                              <Route path="/contacts" element={<ContactsPage />} />
+                              <Route path="/sos/history" element={<SOSHistoryPage />} />
+                              <Route path="/journey" element={<JourneyPage />} />
+                              <Route path="/incidents" element={<IncidentsPage />} />
+                              <Route path="/incidents/report" element={<ReportIncidentPage />} />
+                              <Route path="/ai-assistant" element={<AIAssistantPage />} />
+                              <Route path="/profile" element={<ProfilePage />} />
+                            </Route>
 
-                      {/* Admin Protected Routes */}
-                      <Route element={<AdminRoute />}>
-                        <Route path="/admin" element={<AdminPage />} />
-                      </Route>
+                            {/* Admin Protected Routes */}
+                            <Route element={<AdminRoute />}>
+                              <Route path="/admin" element={<AdminPage />} />
+                            </Route>
 
-                      {/* 404 Fallback */}
-                      <Route path="*" element={<NotFoundPage />} />
-                    </Routes>
-                  </DashboardLayout>
-                }
-              />
-            </Routes>
-          </Router>
-        </SocketProvider>
-      </LocationProvider>
-    </AuthProvider>
+                            {/* 404 Fallback */}
+                            <Route path="*" element={<NotFoundPage />} />
+                          </Routes>
+                        </DashboardLayout>
+                      </ErrorBoundary>
+                    }
+                  />
+                </Routes>
+              </Router>
+            </SocketProvider>
+          </LocationProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

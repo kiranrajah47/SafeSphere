@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useState } from 'react';
 import { ToastContainer } from './Toast';
 
-const ToastContext = createContext();
+const defaultToastContext = {
+  addToast: () => {},
+  removeToast: () => {}
+};
+
+const ToastContext = createContext(defaultToastContext);
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -30,4 +35,4 @@ export function ToastProvider({ children }) {
   );
 }
 
-export const useToast = () => useContext(ToastContext);
+export const useToast = () => useContext(ToastContext) || defaultToastContext;

@@ -1,174 +1,186 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 
-const SocketContext = createContext();
+const defaultContext = {
+  socket: null,
+  isConnected: false,
+  activeSOSAlerts: [],
+  latestCommunityAlert: null,
+  dismissCommunityAlert: () => {},
+  realtimeEventCounter: 0
+};
+
+const SocketContext = createContext(defaultContext);
 
 export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
-  const { addToast } = useToast();
+
+  // useToast is safe because ToastProvider wraps SocketProvider in App.jsx
+  const toastCtx = useToast();
+  const addToast = toastCtx?.addToast || (() => {});
+
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [activeSOSAlerts, setActiveSOSAlerts] = useState([]);
   const [latestCommunityAlert, setLatestCommunityAlert] = useState(null);
   const [realtimeEventCounter, setRealtimeEventCounter] = useState(0);
 
-  useEffect(() => {
-    const token = localStorage.getItem('safesphere_token');
+  const bump = useCallback(() => setRealtimeEventCounter(c => c + 1), []);
 
-    // Connect socket to backend host
-    const socketInstance = io(window.location.origin.replace('3000', '5000'), {
+  useEffect(() => {
+    // Get JWT token from localStorage (stored as part of safesphere_user object)
+    let token = null;
+    try {
+      const raw = localStorage.getItem('safesphere_user');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        token = parsed?.token || null;
+      }
+    } catch (_) {}
+
+    const backendHost = `${window.location.protocol}//${window.location.hostname}:5000`;
+
+    const socketInstance = io(backendHost, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 15,
-      reconnectionDelay: 1000,
+      reconnectionDelay: 1500,
+      reconnectionDelayMax: 10000,
       auth: { token }
     });
 
     socketInstance.on('connect', () => {
-      console.log('[SocketContext] Connected to real-time engine:', socketInstance.id);
+      console.log('[SocketContext] Connected:', socketInstance.id);
       setIsConnected(true);
-
-      if (user) {
-        socketInstance.emit('join_user_room', user._id);
-        if (user.role === 'admin' || user.role === 'responder') {
-          socketInstance.emit('join_admin_room');
-        }
-      }
     });
 
     socketInstance.on('disconnect', (reason) => {
-      console.warn('[SocketContext] Disconnected from server:', reason);
+      console.warn('[SocketContext] Disconnected:', reason);
       setIsConnected(false);
     });
 
-    socketInstance.on('reconnect', (attemptNumber) => {
-      console.log('[SocketContext] Reconnected gracefully on attempt:', attemptNumber);
+    socketInstance.on('reconnect', () => {
+      console.log('[SocketContext] Reconnected gracefully');
       setIsConnected(true);
     });
 
-    // 1. SOS Created Event Handler
-    const handleSOSCreated = (data) => {
-      console.log('🚨 REAL-TIME EVENT [sos-created]:', data);
-      setActiveSOSAlerts((prev) => [data, ...prev]);
-      setRealtimeEventCounter(prev => prev + 1);
+    socketInstance.on('connect_error', (err) => {
+      console.warn('[SocketContext] Connection error (backend may be offline):', err.message);
+    });
 
+    // ---- Event Handlers ----
+
+    const handleSOSCreated = (data) => {
+      console.log('[Socket] sos-created', data);
+      setActiveSOSAlerts(prev => [data, ...prev]);
+      bump();
       addToast({
         type: 'error',
-        title: '🚨 EMERGENCY SOS DISTRESS SIGNAL',
-        message: `${data?.user?.name || 'A user'} has triggered an Emergency SOS near ${data?.sos?.location?.address || 'your area'}.`
+        title: '🚨 Emergency SOS Activated',
+        message: `${data?.user?.name || 'A user'} triggered an SOS near ${data?.sos?.location?.address || 'your area'}.`
       });
     };
 
-    // 2. SOS Resolved Event Handler
-    const handleSOSResolved = ({ sosId }) => {
-      console.log('✅ REAL-TIME EVENT [sos-resolved]:', sosId);
-      setActiveSOSAlerts((prev) => prev.filter((item) => (item.sos?._id || item._id) !== sosId));
-      setRealtimeEventCounter(prev => prev + 1);
-
+    const handleSOSResolved = (data) => {
+      const sosId = data?.sosId || data?._id;
+      console.log('[Socket] sos-resolved', sosId);
+      setActiveSOSAlerts(prev => prev.filter(a => (a.sos?._id || a._id) !== sosId));
+      bump();
       addToast({
         type: 'success',
         title: 'Emergency SOS Resolved',
-        message: 'The active emergency SOS signal has been resolved safely.'
+        message: 'The emergency SOS has been safely resolved.'
       });
     };
 
-    // 3. Community Alert Created Handler
     const handleAlertCreated = (alert) => {
-      console.log('📢 REAL-TIME EVENT [alert-created]:', alert);
+      console.log('[Socket] alert-created', alert);
       setLatestCommunityAlert(alert);
-      setRealtimeEventCounter(prev => prev + 1);
-
+      bump();
       addToast({
         type: 'warning',
-        title: `Safety Alert: ${alert.title}`,
-        message: `New ${alert.severity?.toUpperCase()} severity ${alert.category} alert posted near ${alert.address || 'your area'}.`
+        title: `⚠️ Safety Alert: ${alert?.title || 'New Alert'}`,
+        message: `New ${alert?.severity?.toUpperCase() || 'MEDIUM'} severity ${alert?.category || ''} alert near ${alert?.address || 'your area'}.`
       });
     };
 
-    // 4. Alert Updated Handler
     const handleAlertUpdated = (alert) => {
-      console.log('📢 REAL-TIME EVENT [alert-updated]:', alert);
-      setRealtimeEventCounter(prev => prev + 1);
+      console.log('[Socket] alert-updated', alert);
+      bump();
     };
 
-    // 5. Incident Verified Handler
     const handleIncidentVerified = (report) => {
-      console.log('🛡️ REAL-TIME EVENT [incident-verified]:', report);
-      setRealtimeEventCounter(prev => prev + 1);
-
+      console.log('[Socket] incident-verified', report);
+      bump();
       addToast({
         type: 'info',
-        title: 'Verified Incident Alert Published',
-        message: `Moderators have verified and published "${report.title}" as a Verified Alert.`
+        title: 'Verified Alert Published',
+        message: `Moderators verified "${report?.title || 'an incident'}" as a community safety alert.`
       });
     };
 
-    // 6. Journey Started Handler
     const handleJourneyStarted = (journey) => {
-      console.log('🛡️ REAL-TIME EVENT [journey-started]:', journey);
-      setRealtimeEventCounter(prev => prev + 1);
+      console.log('[Socket] journey-started', journey);
+      bump();
     };
 
-    // 7. Journey Warning / Escalation Handler
     const handleJourneyWarning = (data) => {
-      console.log('🚨 REAL-TIME EVENT [journey-warning]:', data);
-      setRealtimeEventCounter(prev => prev + 1);
-
+      console.log('[Socket] journey-warning', data);
+      bump();
       addToast({
         type: 'error',
-        title: '🚨 SAFE JOURNEY ESCALATION ALERT',
-        message: `Trip to "${data?.journey?.destinationName || 'destination'}" by ${data?.user?.name || 'user'} exceeded expected arrival check-in.`
+        title: '🚨 Safe Journey Warning',
+        message: `Trip to "${data?.journey?.destinationName || 'destination'}" has exceeded expected arrival time.`
       });
     };
 
-    // Attach listeners for both hyphenated and underscored event names
-    socketInstance.on('sos-created', handleSOSCreated);
-    socketInstance.on('sos_created', handleSOSCreated);
+    // Register both hyphenated and underscored event variants
+    const events = [
+      ['sos-created', 'sos_created', handleSOSCreated],
+      ['sos-resolved', 'sos_resolved', handleSOSResolved],
+      ['alert-created', 'alert_created', handleAlertCreated],
+      ['alert-updated', 'alert_updated', handleAlertUpdated],
+      ['incident-verified', 'incident_verified', handleIncidentVerified],
+      ['journey-started', 'journey_started', handleJourneyStarted],
+      ['journey-warning', 'journey_warning', handleJourneyWarning],
+    ];
 
-    socketInstance.on('sos-resolved', handleSOSResolved);
-    socketInstance.on('sos_resolved', handleSOSResolved);
-
-    socketInstance.on('alert-created', handleAlertCreated);
-    socketInstance.on('alert_created', handleAlertCreated);
-
-    socketInstance.on('alert-updated', handleAlertUpdated);
-    socketInstance.on('alert_updated', handleAlertUpdated);
-
-    socketInstance.on('incident-verified', handleIncidentVerified);
-    socketInstance.on('incident_verified', handleIncidentVerified);
-
-    socketInstance.on('journey-started', handleJourneyStarted);
-    socketInstance.on('journey_started', handleJourneyStarted);
-
-    socketInstance.on('journey-warning', handleJourneyWarning);
-    socketInstance.on('journey_warning', handleJourneyWarning);
+    events.forEach(([hyphen, underscore, handler]) => {
+      socketInstance.on(hyphen, handler);
+      socketInstance.on(underscore, handler);
+    });
 
     setSocket(socketInstance);
 
     return () => {
+      events.forEach(([hyphen, underscore, handler]) => {
+        socketInstance.off(hyphen, handler);
+        socketInstance.off(underscore, handler);
+      });
       socketInstance.disconnect();
     };
-  }, [user?._id, user?.role]);
+  }, [user?._id]);
 
-  const dismissCommunityAlert = () => setLatestCommunityAlert(null);
+  const dismissCommunityAlert = useCallback(() => setLatestCommunityAlert(null), []);
 
   return (
-    <SocketContext.Provider
-      value={{
-        socket,
-        isConnected,
-        activeSOSAlerts,
-        latestCommunityAlert,
-        dismissCommunityAlert,
-        realtimeEventCounter
-      }}
-    >
+    <SocketContext.Provider value={{
+      socket,
+      isConnected,
+      activeSOSAlerts,
+      latestCommunityAlert,
+      dismissCommunityAlert,
+      realtimeEventCounter
+    }}>
       {children}
     </SocketContext.Provider>
   );
 };
 
-export const useSocket = () => useContext(SocketContext);
+export const useSocket = () => {
+  const ctx = useContext(SocketContext);
+  return ctx || defaultContext;
+};

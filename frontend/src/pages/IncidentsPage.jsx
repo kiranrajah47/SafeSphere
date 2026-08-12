@@ -6,6 +6,7 @@ import SafetyMap from '../components/map/SafetyMap';
 import { useLocation } from '../context/LocationContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
+import { useSocket } from '../context/SocketContext';
 import Input from '../components/ui/Input';
 import { Select, TextArea } from '../components/ui/Select';
 import Button from '../components/ui/Button';
@@ -34,6 +35,7 @@ export default function IncidentsPage() {
   const { location } = useLocation();
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { realtimeEventCounter } = useSocket();
 
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
