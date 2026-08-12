@@ -34,7 +34,7 @@ initSocket(server);
 
 // Middleware
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Support base64 profile image uploads up to 10MB
 
 // Health Check API
 app.get('/api/v1/health', (req, res) => {
@@ -51,6 +51,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/auth', authRoutes);
 
 app.use('/api/v1/users', userRoutes);
+app.use('/api/users', userRoutes);
 
 app.use('/api/v1/contacts', contactRoutes);
 app.use('/api/contacts', contactRoutes);

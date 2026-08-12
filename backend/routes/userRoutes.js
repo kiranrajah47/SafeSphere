@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getProfile,
   updateProfile,
-  getEmergencyContacts,
-  addEmergencyContact,
-  deleteEmergencyContact,
+  changePassword,
   updateMedicalInfo
 } = require('../controllers/userController');
 const { protect } = require('../middlewares/authMiddleware');
 
-router.put('/profile', protect, updateProfile);
-router.get('/contacts', protect, getEmergencyContacts);
-router.post('/contacts', protect, addEmergencyContact);
-router.delete('/contacts/:id', protect, deleteEmergencyContact);
-router.put('/medical', protect, updateMedicalInfo);
+router.use(protect); // All profile routes require authentication
+
+router.get('/profile', getProfile);
+router.put('/profile', updateProfile);
+router.put('/change-password', changePassword);
+router.put('/medical', updateMedicalInfo);
 
 module.exports = router;

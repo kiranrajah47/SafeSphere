@@ -1,33 +1,58 @@
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
-const EmergencyContact = require('../models/EmergencyContact');
 
-// @desc    Update user profile details
-// @route   PUT /api/v1/users/profile
+// @desc    Get logged in user profile details
+// @route   GET /api/v1/users/profile or /api/users/profile
+// @access  Private
+const getProfile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('-passwordHash -otpCode -resetPasswordToken')
+      .populate('emergencyContacts');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User profile not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update user profile details (name, phone, profileImage)
+// @route   PUT /api/v1/users/profile or /api/users/profile
 // @access  Private
 const updateProfile = async (req, res, next) => {
   try {
-    const { name, phone, avatar } = req.body;
+    const { name, phone, profileImage, avatar } = req.body;
     const user = await User.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    if (name) user.name = name;
-    if (phone) user.phone = phone;
-    if (avatar !== undefined) user.avatar = avatar;
+    if (name) user.name = name.trim();
+    if (phone) user.phone = phone.trim();
+    if (profileImage !== undefined) user.profileImage = profileImage;
+    if (avatar !== undefined) user.profileImage = avatar;
 
     const updatedUser = await user.save();
 
     return res.json({
       success: true,
+      message: 'Profile details updated successfully',
       data: {
         _id: updatedUser._id,
         name: updatedUser.name,
         email: updatedUser.email,
         phone: updatedUser.phone,
         role: updatedUser.role,
-        avatar: updatedUser.avatar,
+        profileImage: updatedUser.profileImage,
+        createdAt: updatedUser.createdAt,
         medicalInfo: updatedUser.medicalInfo
       }
     });
@@ -36,88 +61,46 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
-// @desc    Get user's emergency contacts
-// @route   GET /api/v1/users/contacts
+// @desc    Change user password
+// @route   PUT /api/v1/users/change-password or /api/users/change-password
 // @access  Private
-const getEmergencyContacts = async (req, res, next) => {
+const changePassword = async (req, res, next) => {
   try {
-    const contacts = await EmergencyContact.find({ userId: req.user._id });
-    return res.json({
-      success: true,
-      count: contacts.length,
-      data: contacts
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+    const { currentPassword, newPassword } = req.body;
 
-// @desc    Add a new emergency contact
-// @route   POST /api/v1/users/contacts
-// @access  Private
-const addEmergencyContact = async (req, res, next) => {
-  try {
-    const { name, relationship, phone, email, notifyViaSMS } = req.body;
-
-    if (!name || !relationship || !phone) {
-      return res.status(400).json({ success: false, message: 'Name, relationship, and phone number are required' });
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Current password and new password are required' });
     }
 
-    const contact = await EmergencyContact.create({
-      userId: req.user._id,
-      name,
-      relationship,
-      phone,
-      email: email || '',
-      notifyViaSMS: notifyViaSMS !== undefined ? notifyViaSMS : true
-    });
-
-    // Link contact to User document
-    await User.findByIdAndUpdate(req.user._id, {
-      $push: { emergencyContacts: contact._id }
-    });
-
-    return res.status(201).json({
-      success: true,
-      data: contact
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Delete an emergency contact
-// @route   DELETE /api/v1/users/contacts/:id
-// @access  Private
-const deleteEmergencyContact = async (req, res, next) => {
-  try {
-    const contact = await EmergencyContact.findOne({
-      _id: req.params.id,
-      userId: req.user._id
-    });
-
-    if (!contact) {
-      return res.status(404).json({ success: false, message: 'Emergency contact not found' });
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long' });
     }
 
-    await EmergencyContact.deleteOne({ _id: req.params.id });
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
-    // Remove from User document
-    await User.findByIdAndUpdate(req.user._id, {
-      $pull: { emergencyContacts: req.params.id }
-    });
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    await user.save();
 
     return res.json({
       success: true,
-      message: 'Emergency contact removed successfully'
+      message: 'Password changed successfully! Please use your new password next time you sign in.'
     });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Update medical profile info
-// @route   PUT /api/v1/users/medical
+// @desc    Update medical & emergency information
+// @route   PUT /api/v1/users/medical or /api/users/medical
 // @access  Private
 const updateMedicalInfo = async (req, res, next) => {
   try {
@@ -128,17 +111,33 @@ const updateMedicalInfo = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Convert comma-separated string to array if provided as string
+    let allergiesArr = user.medicalInfo?.allergies || [];
+    if (typeof allergies === 'string') {
+      allergiesArr = allergies.split(',').map(s => s.trim()).filter(Boolean);
+    } else if (Array.isArray(allergies)) {
+      allergiesArr = allergies;
+    }
+
+    let conditionsArr = user.medicalInfo?.medicalConditions || [];
+    if (typeof medicalConditions === 'string') {
+      conditionsArr = medicalConditions.split(',').map(s => s.trim()).filter(Boolean);
+    } else if (Array.isArray(medicalConditions)) {
+      conditionsArr = medicalConditions;
+    }
+
     user.medicalInfo = {
-      bloodGroup: bloodGroup || user.medicalInfo.bloodGroup,
-      allergies: Array.isArray(allergies) ? allergies : user.medicalInfo.allergies,
-      medicalConditions: Array.isArray(medicalConditions) ? medicalConditions : user.medicalInfo.medicalConditions,
-      emergencyNotes: emergencyNotes !== undefined ? emergencyNotes : user.medicalInfo.emergencyNotes
+      bloodGroup: bloodGroup !== undefined ? bloodGroup : (user.medicalInfo?.bloodGroup || 'Unknown'),
+      allergies: allergiesArr,
+      medicalConditions: conditionsArr,
+      emergencyNotes: emergencyNotes !== undefined ? emergencyNotes : (user.medicalInfo?.emergencyNotes || '')
     };
 
     await user.save();
 
     return res.json({
       success: true,
+      message: 'Emergency medical information updated successfully',
       data: user.medicalInfo
     });
   } catch (error) {
@@ -147,9 +146,8 @@ const updateMedicalInfo = async (req, res, next) => {
 };
 
 module.exports = {
+  getProfile,
   updateProfile,
-  getEmergencyContacts,
-  addEmergencyContact,
-  deleteEmergencyContact,
+  changePassword,
   updateMedicalInfo
 };
