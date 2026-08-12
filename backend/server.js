@@ -13,6 +13,7 @@ const { startWatchdog } = require('./services/watchdogService');
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 const sosRoutes = require('./routes/sosRoutes');
 const incidentRoutes = require('./routes/incidentRoutes');
 const alertRoutes = require('./routes/alertRoutes');
@@ -44,9 +45,15 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
-// API Routes
+// API Routes (Mounted under /api/v1 and /api for compatibility)
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/auth', authRoutes);
+
 app.use('/api/v1/users', userRoutes);
+
+app.use('/api/v1/contacts', contactRoutes);
+app.use('/api/contacts', contactRoutes);
+
 app.use('/api/v1/sos', sosRoutes);
 app.use('/api/v1/incidents', incidentRoutes);
 app.use('/api/v1/alerts', alertRoutes);

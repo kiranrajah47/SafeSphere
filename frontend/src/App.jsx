@@ -11,6 +11,7 @@ import MapPage from './pages/MapPage';
 import JourneyPage from './pages/JourneyPage';
 import IncidentsPage from './pages/IncidentsPage';
 import ResourcesPage from './pages/ResourcesPage';
+import ContactsPage from './pages/ContactsPage';
 import AIAssistantPage from './pages/AIAssistantPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
@@ -48,6 +49,7 @@ export default function App() {
                       {/* Protected Routes for Logged In Users */}
                       <Route element={<ProtectedRoute />}>
                         <Route path="/" element={<HomePage />} />
+                        <Route path="/contacts" element={<ContactsPage />} />
                         <Route path="/journey" element={<JourneyPage />} />
                         <Route path="/incidents" element={<IncidentsPage />} />
                         <Route path="/ai-assistant" element={<AIAssistantPage />} />

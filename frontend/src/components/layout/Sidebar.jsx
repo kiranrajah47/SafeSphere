@@ -8,13 +8,12 @@ import {
   Navigation, 
   AlertTriangle, 
   BookOpen, 
+  Users,
   Bot, 
   ShieldAlert, 
   User, 
   LogOut,
-  Radio,
-  ChevronRight,
-  PhoneCall
+  ChevronRight
 } from 'lucide-react';
 
 export default function Sidebar({ onTriggerSOSClick }) {
@@ -24,6 +23,7 @@ export default function Sidebar({ onTriggerSOSClick }) {
 
   const navItems = [
     { label: 'Dashboard', path: '/', icon: Shield, color: 'text-indigo-600' },
+    { label: 'Emergency Contacts', path: '/contacts', icon: Users, color: 'text-red-600' },
     { label: 'Safety Map', path: '/map', icon: MapPin, color: 'text-blue-600' },
     { label: 'Safe Journey', path: '/journey', icon: Navigation, color: 'text-emerald-600' },
     { label: 'Incidents Feed', path: '/incidents', icon: AlertTriangle, color: 'text-amber-600' },
@@ -61,7 +61,7 @@ export default function Sidebar({ onTriggerSOSClick }) {
         {/* SOS Emergency Quick Button in Sidebar */}
         <button
           onClick={onTriggerSOSClick}
-          className="w-full py-3 px-4 rounded-xl font-extrabold text-xs text-white bg-red-600 hover:bg-red-700 active:bg-red-800 shadow-md shadow-red-600/25 transition-all flex items-center justify-center space-x-2 animate-emergency-pulse uppercase tracking-wider"
+          className="w-full py-3 px-4 rounded-xl font-extrabold text-xs text-white bg-red-600 hover:bg-red-700 active:bg-red-800 shadow-md shadow-red-600/25 transition-all flex items-center justify-center space-x-2 animate-emergency-pulse uppercase tracking-wider cursor-pointer"
         >
           <ShieldAlert className="w-4 h-4" />
           <span>Emergency SOS</span>
