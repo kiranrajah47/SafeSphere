@@ -10,6 +10,7 @@ import HomePage from './pages/HomePage';
 import MapPage from './pages/MapPage';
 import JourneyPage from './pages/JourneyPage';
 import IncidentsPage from './pages/IncidentsPage';
+import ReportIncidentPage from './pages/ReportIncidentPage';
 import ResourcesPage from './pages/ResourcesPage';
 import ContactsPage from './pages/ContactsPage';
 import SOSHistoryPage from './pages/SOSHistoryPage';
@@ -54,6 +55,7 @@ export default function App() {
                         <Route path="/sos/history" element={<SOSHistoryPage />} />
                         <Route path="/journey" element={<JourneyPage />} />
                         <Route path="/incidents" element={<IncidentsPage />} />
+                        <Route path="/incidents/report" element={<ReportIncidentPage />} />
                         <Route path="/ai-assistant" element={<AIAssistantPage />} />
                         <Route path="/profile" element={<ProfilePage />} />
                       </Route>

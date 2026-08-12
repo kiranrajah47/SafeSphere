@@ -68,6 +68,8 @@ app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/alerts', alertRoutes);
 
 app.use('/api/v1/incidents', incidentRoutes);
+app.use('/api/incidents', incidentRoutes);
+
 app.use('/api/v1/journey', journeyRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/admin', adminRoutes);
