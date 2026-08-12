@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, User, Mail, Phone, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Card, CardContent } from '../components/ui/Card';
+import Input from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import Button from '../components/ui/Button';
+import AlertBanner from '../components/ui/AlertBanner';
+import { Shield, User, Mail, Phone, Lock, ArrowRight } from 'lucide-react';
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -11,6 +16,7 @@ export default function RegisterPage() {
     email: '',
     phone: '',
     password: '',
+    confirmPassword: '',
     role: 'user'
   });
   const [error, setError] = useState('');
@@ -19,11 +25,30 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match. Please re-enter your password.');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await register(formData.name, formData.email, formData.phone, formData.password, formData.role);
-      navigate('/');
+      const resData = await register(
+        formData.name,
+        formData.email,
+        formData.phone,
+        formData.password,
+        formData.role
+      );
+
+      // Redirect to OTP Verification page with email prefilled
+      navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}&devOtp=${encodeURIComponent(resData.devOtp || '')}`);
     } catch (err) {
       setError(err.message || 'Registration failed. Please check your inputs.');
     } finally {
@@ -32,136 +57,114 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md glass-panel p-8 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="w-full max-w-md space-y-6">
         
-        {/* Top Glow Background */}
-        <div className="absolute -top-20 -left-20 w-48 h-48 bg-red-600/10 rounded-full blur-3xl" />
-
         {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex p-3 bg-red-600/10 text-red-500 rounded-2xl border border-red-500/20 mb-3">
+        <div className="text-center space-y-2">
+          <div className="inline-flex p-3 bg-indigo-600 rounded-2xl text-white shadow-md shadow-indigo-600/30">
             <Shield className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-black text-white tracking-tight">Create SafeSphere Account</h2>
-          <p className="text-sm text-slate-400 mt-1">Join the community personal safety & emergency platform</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Create SafeSphere Account</h1>
+          <p className="text-xs text-slate-500 font-medium">Personal safety & 24/7 emergency alert protection</p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+        <Card className="shadow-lg border-slate-200">
+          <CardContent className="p-6 sm:p-8 space-y-5">
+            
+            {error && (
+              <AlertBanner type="danger" onDismiss={() => setError('')}>
+                {error}
+              </AlertBanner>
+            )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Full Name
-            </label>
-            <div className="relative">
-              <User className="w-5 h-5 text-slate-400 absolute left-3.5 top-3" />
-              <input
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Input
+                label="Full Name"
                 type="text"
                 required
+                icon={User}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="John Doe"
-                className="w-full pl-11 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
               />
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="w-5 h-5 text-slate-400 absolute left-3.5 top-3" />
-              <input
+              <Input
+                label="Email Address"
                 type="email"
                 required
+                icon={Mail}
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="john@example.com"
-                className="w-full pl-11 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
               />
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Phone Number (For Emergency Alerts)
-            </label>
-            <div className="relative">
-              <Phone className="w-5 h-5 text-slate-400 absolute left-3.5 top-3" />
-              <input
+              <Input
+                label="Phone Number (SMS Alert Notifications)"
                 type="tel"
                 required
+                icon={Phone}
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="+1 555 019 2834"
-                className="w-full pl-11 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
               />
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="w-5 h-5 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="password"
-                required
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="••••••••"
-                className="w-full pl-11 pr-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Password"
+                  type="password"
+                  required
+                  icon={Lock}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="••••••••"
+                />
+
+                <Input
+                  label="Confirm Password"
+                  type="password"
+                  required
+                  icon={Lock}
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <Select
+                label="Account Role"
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                options={[
+                  { value: 'user', label: 'Standard User (Personal Safety)' },
+                  { value: 'admin', label: 'System Administrator' }
+                ]}
               />
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                loading={loading}
+                icon={ArrowRight}
+                iconPosition="right"
+                className="w-full mt-2"
+              >
+                Register & Verify OTP
+              </Button>
+            </form>
+
+            <div className="pt-4 border-t border-slate-100 text-center">
+              <p className="text-xs text-slate-600">
+                Already registered?{' '}
+                <Link to="/login" className="font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+                  Sign in here
+                </Link>
+              </p>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Account Role
-            </label>
-            <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full px-4 py-3 bg-slate-900/90 border border-slate-800 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-red-500"
-            >
-              <option value="user">Standard User (Personal Safety)</option>
-              <option value="responder">Emergency First Responder</option>
-              <option value="admin">System Administrator</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3.5 px-4 rounded-xl font-bold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-lg shadow-red-600/30 transition-all flex items-center justify-center space-x-2 mt-2"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <span>Complete Registration</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-        </form>
-
-        <div className="mt-6 pt-4 border-t border-slate-800/80 text-center">
-          <p className="text-xs text-slate-400">
-            Already registered?{' '}
-            <Link to="/login" className="font-semibold text-red-400 hover:text-red-300 hover:underline">
-              Log in here
-            </Link>
-          </p>
-        </div>
+          </CardContent>
+        </Card>
 
       </div>
     </div>

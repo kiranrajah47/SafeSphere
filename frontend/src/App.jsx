@@ -16,6 +16,9 @@ import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import VerifyOTPPage from './pages/VerifyOTPPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
@@ -25,9 +28,12 @@ export default function App() {
         <SocketProvider>
           <Router>
             <Routes>
-              {/* Auth Pages (Outside Main Layout) */}
+              {/* Standalone Authentication Routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-otp" element={<VerifyOTPPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
 
               {/* Main Application Routes (Inside Professional Dashboard Layout) */}
               <Route

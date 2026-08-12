@@ -22,7 +22,6 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (err) {
           console.warn('[AuthContext] Session validation failed:', err.message);
-          // If token expired or invalid, logout
           if (err.message.includes('authorized') || err.message.includes('expired')) {
             logout();
           }
@@ -46,11 +45,35 @@ export const AuthProvider = ({ children }) => {
   const register = async (name, email, phone, password, role = 'user') => {
     const res = await API.post('/auth/register', { name, email, phone, password, role });
     if (res.success && res.data) {
+      return res.data;
+    }
+    throw new Error(res.message || 'Registration failed');
+  };
+
+  const verifyOTP = async (email, otpCode) => {
+    const res = await API.post('/auth/verify-otp', { email, otpCode });
+    if (res.success && res.data) {
       setUser(res.data);
       localStorage.setItem('safesphere_user', JSON.stringify(res.data));
       return res.data;
     }
-    throw new Error(res.message || 'Registration failed');
+    throw new Error(res.message || 'OTP verification failed');
+  };
+
+  const forgotPassword = async (email) => {
+    const res = await API.post('/auth/forgot-password', { email });
+    if (res.success) {
+      return res.data;
+    }
+    throw new Error(res.message || 'Forgot password request failed');
+  };
+
+  const resetPassword = async (email, otpCode, newPassword) => {
+    const res = await API.post('/auth/reset-password', { email, otpCode, newPassword });
+    if (res.success) {
+      return res;
+    }
+    throw new Error(res.message || 'Password reset failed');
   };
 
   const logout = () => {
@@ -67,7 +90,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUserProfile }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        verifyOTP,
+        forgotPassword,
+        resetPassword,
+        logout,
+        updateUserProfile
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

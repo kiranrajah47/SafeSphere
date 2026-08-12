@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import AlertBanner from '../components/ui/AlertBanner';
-import { Shield, Mail, Lock, ArrowRight, KeyRound } from 'lucide-react';
+import { Shield, Mail, KeyRound, ArrowRight } from 'lucide-react';
 
-export default function LoginPage() {
-  const { login } = useAuth();
+export default function ForgotPasswordPage() {
+  const { forgotPassword } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,18 +18,18 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
-      setError('Please provide both email and password.');
+    if (!email) {
+      setError('Please enter your registered email address.');
       return;
     }
 
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate('/');
+      const resData = await forgotPassword(email);
+      navigate(`/reset-password?email=${encodeURIComponent(email)}&devOtp=${encodeURIComponent(resData?.devOtp || '')}`);
     } catch (err) {
-      setError(err.message || 'Login failed. Please verify your credentials.');
+      setError(err.message || 'Forgot password request failed.');
     } finally {
       setLoading(false);
     }
@@ -40,17 +39,17 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md space-y-6">
         
-        {/* Brand Header */}
+        {/* Header */}
         <div className="text-center space-y-2">
           <div className="inline-flex p-3 bg-indigo-600 rounded-2xl text-white shadow-md shadow-indigo-600/30">
-            <Shield className="w-8 h-8" />
+            <KeyRound className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Sign in to SafeSphere</h1>
-          <p className="text-xs text-slate-500 font-medium">Access universal personal safety & emergency controls</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Forgot Password</h1>
+          <p className="text-xs text-slate-500 font-medium">Enter your email to receive a password reset OTP code</p>
         </div>
 
         <Card className="shadow-lg border-slate-200">
-          <CardContent className="p-6 sm:p-8 space-y-6">
+          <CardContent className="p-6 sm:p-8 space-y-5">
             
             {error && (
               <AlertBanner type="danger" onDismiss={() => setError('')}>
@@ -60,7 +59,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
-                label="Email Address"
+                label="Registered Email Address"
                 type="email"
                 required
                 icon={Mail}
@@ -68,28 +67,6 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
               />
-
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
-                    Password
-                  </label>
-                  <Link
-                    to="/forgot-password"
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
-                  >
-                    Forgot Password?
-                  </Link>
-                </div>
-                <Input
-                  type="password"
-                  required
-                  icon={Lock}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                />
-              </div>
 
               <Button
                 type="submit"
@@ -100,15 +77,15 @@ export default function LoginPage() {
                 iconPosition="right"
                 className="w-full mt-2"
               >
-                Sign In
+                Send Reset Code
               </Button>
             </form>
 
             <div className="pt-4 border-t border-slate-100 text-center">
               <p className="text-xs text-slate-600">
-                Don't have a SafeSphere account yet?{' '}
-                <Link to="/register" className="font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
-                  Create Account
+                Remember your password?{' '}
+                <Link to="/login" className="font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+                  Sign in
                 </Link>
               </p>
             </div>
