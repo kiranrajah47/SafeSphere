@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, required: true, trim: true },
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  isActive: { type: Boolean, default: true },
   profileImage: { type: String, default: '' },
   isOtpVerified: { type: Boolean, default: false },
   otpCode: { type: String, default: null },

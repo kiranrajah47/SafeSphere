@@ -32,6 +32,7 @@ const safetyGuideSchema = new mongoose.Schema({
   videoDuration: { type: String, default: '' },
   thumbnailUrl: { type: String, default: '' },
   author: { type: String, default: 'SafeSphere Medical & Safety Board' },
+  isPublished: { type: Boolean, default: true },
   bookmarkedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, {
   timestamps: true

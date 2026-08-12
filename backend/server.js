@@ -75,7 +75,9 @@ app.use('/api/v1/journey', journeyRoutes);
 app.use('/api/journey', journeyRoutes);
 
 app.use('/api/v1/ai', aiRoutes);
+
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);
